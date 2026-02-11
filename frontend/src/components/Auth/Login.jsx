@@ -91,12 +91,6 @@ const Login = () => {
                         {loading ? 'Logging in...' : 'Login'}
                     </Button>
                 </form>
-                
-                <Box sx={{ mt: 2, textAlign: 'center' }}>
-                    <Typography variant="body2">
-                        Demo Credentials: username: 'manager', password: 'manager123'
-                    </Typography>
-                </Box>
             </Paper>
         </Container>
     );
