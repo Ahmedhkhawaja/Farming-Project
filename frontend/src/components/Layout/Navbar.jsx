@@ -31,9 +31,11 @@ const Navbar = () => {
               Dashboard
             </Button>
 
-            <Button color="inherit" component={Link} to="/products">
-              Products
-            </Button>
+            {user.role === "manager" && (
+              <Button color="inherit" component={Link} to="/products">
+                Products
+              </Button>
+            )}
 
             <Button color="inherit" component={Link} to="/add-stocks">
               Add Stocks

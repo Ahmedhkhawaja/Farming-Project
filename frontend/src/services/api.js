@@ -33,6 +33,22 @@ export const authAPI = {
   getCurrentUser: () => api.get("/auth/me"),
 };
 
+// Product API calls
+export const productsAPI = {
+  getProducts: () => api.get("/products"),
+  getProductTypes: () => api.get("/product-types"),
+  getProductCategories: (type) =>
+    api.get(`/product-categories?type=${type}`),
+  getProductSubCategories: (category) =>
+    api.get(`/product-subcategories?category=${category}`),
+  createProduct: (data) => api.post("/products", data),
+  updateProduct: (id, data) => api.put(`/products/${id}`, data),
+  deleteProduct: (id) => api.delete(`/products/${id}`),
+  createProductCategory: (data) => api.post("/product-categories", data),
+  createProductSubCategory: (data) =>
+    api.post("/product-subcategories", data),
+};
+
 // Stock API calls - UPDATED VERSION
 // In your stockAPI object, add:
 // In your api.js, update stockAPI:

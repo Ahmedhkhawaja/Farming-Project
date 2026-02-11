@@ -27,7 +27,7 @@ import {
   InputLabel,
 } from '@mui/material';
 import { Edit, Delete, Add, Search, Save } from '@mui/icons-material';
-import axios from 'axios';
+import { productsAPI } from '../../services/api';
 
 const ProductManagement = () => {
   const [products, setProducts] = useState([]);
@@ -118,7 +118,7 @@ const ProductManagement = () => {
 
   const fetchProducts = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/products');
+      const response = await productsAPI.getProducts();
       setProducts(response.data);
     } catch (err) {
       console.error('Error fetching products:', err);
@@ -127,7 +127,7 @@ const ProductManagement = () => {
 
   const fetchProductTypes = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/product-types');
+      const response = await productsAPI.getProductTypes();
       setProductTypes(response.data);
     } catch (err) {
       console.error('Error fetching product types:', err);
@@ -136,7 +136,7 @@ const ProductManagement = () => {
 
   const fetchProductCategories = async (productType) => {
     try {
-      const response = await axios.get(`http://localhost:5000/api/product-categories?type=${productType}`);
+      const response = await productsAPI.getProductCategories(productType);
       setProductCategories(response.data);
     } catch (err) {
       console.error('Error fetching product categories:', err);
@@ -145,7 +145,7 @@ const ProductManagement = () => {
 
   const fetchProductSubCategories = async (productCategory) => {
     try {
-      const response = await axios.get(`http://localhost:5000/api/product-subcategories?category=${productCategory}`);
+      const response = await productsAPI.getProductSubCategories(productCategory);
       setProductSubCategories(response.data);
     } catch (err) {
       console.error('Error fetching product subcategories:', err);
@@ -258,7 +258,7 @@ const ProductManagement = () => {
       
       // First, check if we need to add new category to database
       if (formData.isNewProductCategory && newProductCategory) {
-        await axios.post('http://localhost:5000/api/product-categories', {
+        await productsAPI.createProductCategory({
           productType: formData.productType,
           name: newProductCategory
         });
@@ -266,7 +266,7 @@ const ProductManagement = () => {
       
       // Check if we need to add new subcategory to database
       if (formData.isNewProductSubCategory && newProductSubCategory && formData.productType === 'Greens') {
-        await axios.post('http://localhost:5000/api/product-subcategories', {
+        await productsAPI.createProductSubCategory({
           productCategory: formData.productCategory,
           name: newProductSubCategory
         });
@@ -274,10 +274,10 @@ const ProductManagement = () => {
       
       // Now save the product
       if (editingId) {
-        await axios.put(`http://localhost:5000/api/products/${editingId}`, productData);
+        await productsAPI.updateProduct(editingId, productData);
         setSuccess('Product updated successfully!');
       } else {
-        await axios.post('http://localhost:5000/api/products', productData);
+        await productsAPI.createProduct(productData);
         setSuccess('Product added successfully!');
       }
       
@@ -335,7 +335,7 @@ const ProductManagement = () => {
   const handleDeleteConfirm = async () => {
     try {
       setLoading(true);
-      await axios.delete(`http://localhost:5000/api/products/${productToDelete._id}`);
+      await productsAPI.deleteProduct(productToDelete._id);
       setSuccess('Product deleted successfully!');
       await fetchAllData();
       setTimeout(() => setSuccess(''), 3000);

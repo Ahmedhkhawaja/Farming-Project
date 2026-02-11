@@ -9,6 +9,7 @@ import { ThemeProvider, createTheme } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
 import { AuthProvider } from "./context/AuthContext";
 import PrivateRoute from "./components/Layout/PrivateRoute";
+import ManagerRoute from "./components/Layout/ManagerRoute";
 import Navbar from "./components/Layout/Navbar";
 import Login from "./components/Auth/Login";
 import Dashboard from "./components/Dashboard/Dashboard";
@@ -53,9 +54,9 @@ function App() {
               <Route
                 path="/products"
                 element={
-                  <PrivateRoute>
+                  <ManagerRoute>
                     <ProductManagement />
-                  </PrivateRoute>
+                  </ManagerRoute>
                 }
               />
               <Route
