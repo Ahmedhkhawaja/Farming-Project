@@ -68,28 +68,12 @@ const ReturnStock = () => {
       
       const formattedDate = formatDateForAPI(selectedDate);
       
-      console.log("📡 API Request:", {
-        date: formattedDate,
-        location: marketLocation
-      });
-      
       const response = await api.get('/stocks/daily', {
         params: {
           date: formattedDate,
           location: marketLocation
         }
       });
-      
-      console.log("✅ API Response:", response.data);
-      console.log("📊 Response length:", response.data.length);
-      
-      // DEBUG: Show what data we're receiving
-      if (response.data.length > 0) {
-        console.log("🔍 Sample item from API:", response.data[0]);
-        console.log("Sample item totalStock:", response.data[0].totalStock);
-        console.log("Sample item remainingQty:", response.data[0].remainingQty);
-        console.log("Sample item returnQty:", response.data[0].returnQty);
-      }
       
       // Transform API response
       const transformedItems = response.data.map(item => ({
@@ -105,15 +89,6 @@ const ReturnStock = () => {
         // FINAL REMAINING = TOTAL STOCK - RETURN QTY (not remainingQty - returnQty)
         finalRemainingQty: (item.totalStock || 0) - (item.returnQty || 0)
       }));
-      
-      console.log("🔄 Transformed items:", transformedItems);
-      if (transformedItems.length > 0) {
-        console.log("📐 First item calculation:", {
-          totalStock: transformedItems[0].totalStock,
-          returnQty: transformedItems[0].returnQty,
-          calculation: `${transformedItems[0].totalStock} - ${transformedItems[0].returnQty} = ${transformedItems[0].finalRemainingQty}`
-        });
-      }
       
       setStockItems(transformedItems);
       setOriginalItems(JSON.parse(JSON.stringify(transformedItems)));
@@ -162,7 +137,6 @@ const ReturnStock = () => {
     const updatedItems = stockItems.map(item => {
       if (item.id === itemId) {
         const finalRemainingQty = item.totalStock - returnQty;
-        console.log(`💾 Saving edit for ${item.productName}: ${item.totalStock} - ${returnQty} = ${finalRemainingQty}`);
         return {
           ...item,
           returnQty: returnQty,
@@ -193,7 +167,6 @@ const ReturnStock = () => {
       if (item) {
         const returnQty = parseInt(editReturnQty) || 0;
         const result = item.totalStock - returnQty;
-        console.log(`🔢 Live calculation: ${item.totalStock} - ${returnQty} = ${result}`);
         return result;
       }
     }
@@ -209,7 +182,6 @@ const ReturnStock = () => {
       // Prepare data for API
       const returnsData = stockItems.map(item => {
         const finalRemaining = item.totalStock - item.returnQty;
-        console.log(`📦 Preparing ${item.productName}: ${item.totalStock} - ${item.returnQty} = ${finalRemaining}`);
         return {
           id: item.id,
           returnQty: item.returnQty,
@@ -225,16 +197,12 @@ const ReturnStock = () => {
         return;
       }
       
-      console.log('📦 Saving returns:', itemsWithReturns);
-      
       // Call API to save returns
       const response = await api.put('/stocks/returns/bulk', {
         returns: itemsWithReturns,
         location: marketLocation,
         date: formatDateForAPI(selectedDate)
       });
-      
-      console.log('✅ Save response:', response.data);
       
       // Update original items
       setOriginalItems(JSON.parse(JSON.stringify(stockItems)));

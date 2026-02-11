@@ -304,9 +304,9 @@ const createAdminUser = async () => {
 
 async function migrateStockCategories() {
   try {
-    await mongoose.connect("mongodb://localhost:27017/your-database-name", {
+    await mongoose.connect(process.env.MONGODB_URI || "mongodb://localhost:27017/grocery-sales", {
       useNewUrlParser: true,
-      useUnifiedTopality: true,
+      useUnifiedTopology: true,
     });
 
     console.log("Connected to MongoDB");

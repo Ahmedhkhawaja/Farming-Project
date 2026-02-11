@@ -132,8 +132,8 @@ const AddStock = () => {
     { productType: 'Kitchen', productCategory: 'Burger', unit: 'pieces' }
   ];
 
-  // Weather API key
-  const WEATHER_API_KEY = '11429cda8c44fbbbcfcbcddf66aeba13';
+  // Weather API key - use env var in production (set REACT_APP_WEATHER_API_KEY in Vercel)
+  const WEATHER_API_KEY = process.env.REACT_APP_WEATHER_API_KEY || '11429cda8c44fbbbcfcbcddf66aeba13';
 
   // Load saved stocks when date or location changes
   useEffect(() => {
