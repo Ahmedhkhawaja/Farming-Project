@@ -5,12 +5,17 @@ const ProductType = require("../models/ProductType");
 const ProductCategory = require("../models/ProductCategory");
 const ProductSubCategory = require("../models/ProductSubCategory");
 const Stock = require("../models/Stock"); // New Stock model
+const auth = require("../middleware/auth");
+const requireManager = require("../middleware/requireManager");
 
 // Debug middleware - logs all requests to product routes
 router.use((req, res, next) => {
   console.log(`📦 Product Route: ${req.method} ${req.originalUrl}`);
   next();
 });
+
+// Require auth for all product routes
+router.use(auth);
 
 // Get all product types
 router.get("/product-types", async (req, res) => {
@@ -53,7 +58,7 @@ router.get("/product-categories", async (req, res) => {
 });
 
 // Create new product category
-router.post("/product-categories", async (req, res) => {
+router.post("/product-categories", requireManager, async (req, res) => {
   try {
     const { productType, name } = req.body;
     console.log(`Creating new category: ${name} for type: ${productType}`);
@@ -117,7 +122,7 @@ router.get("/product-subcategories", async (req, res) => {
 });
 
 // Create new product subcategory
-router.post("/product-subcategories", async (req, res) => {
+router.post("/product-subcategories", requireManager, async (req, res) => {
   try {
     const { productCategory, name } = req.body;
     console.log(
@@ -189,7 +194,7 @@ router.get("/products", async (req, res) => {
 });
 
 // Create new product
-router.post("/products", async (req, res) => {
+router.post("/products", requireManager, async (req, res) => {
   try {
     const { productType, productCategory, productSubCategory, unit } = req.body;
     console.log(`Creating new product: ${productCategory} (${productType})`);
@@ -267,7 +272,7 @@ router.post("/products", async (req, res) => {
 });
 
 // Update product
-router.put("/products/:id", async (req, res) => {
+router.put("/products/:id", requireManager, async (req, res) => {
   try {
     const { id } = req.params;
     const { productType, productCategory, productSubCategory, unit } = req.body;
@@ -333,7 +338,7 @@ router.put("/products/:id", async (req, res) => {
 });
 
 // Delete product
-router.delete("/products/:id", async (req, res) => {
+router.delete("/products/:id", requireManager, async (req, res) => {
   try {
     const { id } = req.params;
     console.log(`Deleting product ${id}`);
