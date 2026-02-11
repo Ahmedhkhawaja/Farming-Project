@@ -1,0 +1,317 @@
+/* ReturnStock.css */
+
+.return-stock-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+}
+
+.page-title {
+  color: #2c3e50;
+  margin-bottom: 30px;
+  font-size: 28px;
+  border-bottom: 2px solid #3498db;
+  padding-bottom: 10px;
+}
+
+.section-title {
+  color: #2c3e50;
+  font-weight: 600;
+  margin-bottom: 20px;
+  font-size: 18px;
+}
+
+/* Market Details */
+.market-details-section {
+  background: white;
+  padding: 25px;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+  margin-bottom: 20px;
+}
+
+.market-details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 25px;
+  margin-bottom: 20px;
+}
+
+.market-detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-label {
+  font-weight: 600;
+  color: #34495e;
+  font-size: 14px;
+  margin-bottom: 6px;
+}
+
+.field-hint {
+  font-size: 0.75rem;
+  color: #7f8c8d;
+  margin-top: 4px;
+}
+
+/* Summary Section */
+.summary-section {
+  background: white;
+  padding: 25px;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 20px;
+  margin-top: 10px;
+}
+
+.summary-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border: 1px solid #e0e0e0;
+}
+
+.summary-label {
+  font-weight: 600;
+  color: #7f8c8d;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.summary-value {
+  color: #2c3e50;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.return-total {
+  color: #d35400;
+}
+
+.final-remaining {
+  color: #27ae60;
+}
+
+/* Stock Items Section */
+.stock-items-section {
+  background: white;
+  padding: 25px;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+}
+
+/* Table Styles */
+.stock-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.stock-table th {
+  background: #f8f9fa;
+  color: #34495e;
+  font-weight: 600;
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 2px solid #e0e0e0;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.stock-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid #eee;
+  color: #34495e;
+  font-size: 14px;
+}
+
+.stock-table tr:hover {
+  background-color: #f8f9fa;
+}
+
+.editing-row {
+  background-color: #fff9e6 !important;
+  border-left: 3px solid #f39c12;
+}
+
+/* Action Buttons */
+.action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.edit-button {
+  color: #3498db !important;
+  padding: 6px !important;
+}
+
+.edit-button:hover:not(:disabled) {
+  background-color: rgba(52, 152, 219, 0.1) !important;
+}
+
+.edit-button:disabled {
+  color: #bdc3c7 !important;
+  cursor: not-allowed !important;
+}
+
+.save-button {
+  color: #2ecc71 !important;
+  padding: 6px !important;
+}
+
+.save-button:hover {
+  background-color: rgba(46, 204, 113, 0.1) !important;
+}
+
+.cancel-button {
+  color: #e74c3c !important;
+  padding: 6px !important;
+}
+
+.cancel-button:hover {
+  background-color: rgba(231, 76, 60, 0.1) !important;
+}
+
+/* Buttons */
+.MuiButton-containedSuccess {
+  background: #2ecc71 !important;
+  color: white !important;
+  padding: 10px 25px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  font-size: 14px !important;
+}
+
+.MuiButton-containedSuccess:hover {
+  background: #27ae60 !important;
+}
+
+.MuiButton-containedSuccess:disabled {
+  background: #bdc3c7 !important;
+  color: #7f8c8d !important;
+}
+
+.MuiButton-outlinedWarning {
+  color: #f39c12 !important;
+  border-color: #f39c12 !important;
+}
+
+.MuiButton-outlinedWarning:hover {
+  background-color: rgba(243, 156, 18, 0.1) !important;
+}
+
+/* TextField in table */
+.stock-table .MuiTextField-root {
+  width: 80px;
+}
+
+.stock-table .MuiInputBase-root {
+  height: 32px;
+}
+
+.stock-table .MuiInputBase-input {
+  padding: 6px 10px;
+  text-align: center;
+  font-weight: 600;
+}
+
+/* No Items */
+.no-items {
+  text-align: center;
+  color: #7f8c8d;
+  padding: 40px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  margin-top: 20px;
+}
+
+/* Divider */
+.MuiDivider-root {
+  border-color: #e0e0e0 !important;
+  margin: 30px 0 !important;
+}
+
+/* Alert Messages */
+.MuiAlert-root {
+  margin-bottom: 20px;
+  border-radius: 4px !important;
+}
+
+/* Loading Spinner */
+.MuiCircularProgress-root {
+  color: white !important;
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+  .return-stock-container {
+    padding: 15px;
+  }
+  
+  .stock-table {
+    display: block;
+    overflow-x: auto;
+  }
+  
+  .stock-table th,
+  .stock-table td {
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 768px) {
+  .market-details-grid,
+  .summary-grid {
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+  
+  .market-details-section,
+  .summary-section,
+  .stock-items-section {
+    padding: 15px;
+  }
+  
+  .summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .summary-value {
+    font-size: 20px;
+  }
+  
+  .stock-table th,
+  .stock-table td {
+    padding: 8px;
+    font-size: 12px;
+  }
+  
+  .action-buttons {
+    flex-direction: column;
+    gap: 4px;
+  }
+}
+
+@media (max-width: 480px) {
+  .summary-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .page-title {
+    font-size: 22px;
+  }
+}

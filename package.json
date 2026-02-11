@@ -1,0 +1,11 @@
+{
+  "name": "farm-inventory-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Farm inventory management app - full-stack deployment",
+  "scripts": {
+    "build": "cd backend && npm install && cd ../frontend && npm install && npm run build",
+    "start:backend": "cd backend && npm start",
+    "start:frontend": "cd frontend && npm start"
+  }
+}
