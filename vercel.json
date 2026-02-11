@@ -5,8 +5,5 @@
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },
     { "source": "/((?!api|static|favicon.ico|manifest.json|.*\\.(?:js|css|ico|png|svg|woff2?|json)$).*)", "destination": "/index.html" }
-  ],
-  "functions": {
-    "api/index.js": {}
-  }
+  ]
 }
