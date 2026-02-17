@@ -1,6 +1,14 @@
 const Stock = require("../models/Stock");
 const mongoose = require("mongoose");
 
+// Helper: get UTC start and end of day from YYYY-MM-DD string
+const getUTCDayRange = (dateStr) => {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const start = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+  const end = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+  return { start, end };
+};
+
 // @route   POST /api/stocks
 // @desc    Add new stock entry (single item)
 exports.addStock = async (req, res) => {
@@ -9,7 +17,7 @@ exports.addStock = async (req, res) => {
       date,
       productType,
       productName,
-      productSubCategory = "", // Default to empty string
+      productSubCategory = "",
       totalStock,
       soldQty = 0,
       returnQty = 0,
@@ -42,7 +50,7 @@ exports.addStock = async (req, res) => {
       weatherDescription,
     });
 
-    // Validate required fields - UPDATED: productSubCategory is not required
+    // Validate required fields
     if (
       !date ||
       !productType ||
@@ -90,7 +98,7 @@ exports.addStock = async (req, res) => {
       date,
       productType,
       productName,
-      productCategory: productName, // Using productName as productCategory for backward compatibility
+      productCategory: productName,
       productSubCategory: productSubCategory || "",
       totalStock,
       soldQty,
@@ -103,13 +111,11 @@ exports.addStock = async (req, res) => {
       weatherHighTemp: weatherHighTempValue,
       weatherLowTemp: weatherLowTempValue,
       weatherDescription: weatherDescription || "No weather data",
-      // Keep weatherTemperature for backward compatibility
       weatherTemperature: weatherTemperature || weatherHighTempValue,
     });
 
     await newStock.save();
 
-    // Return all weather fields for consistency
     res.status(201).json({
       ...newStock.toObject(),
       id: newStock._id,
@@ -120,7 +126,6 @@ exports.addStock = async (req, res) => {
   } catch (err) {
     console.error("Add stock error:", err);
 
-    // Handle validation errors
     if (err.name === "ValidationError") {
       const messages = Object.values(err.errors).map((val) => val.message);
       return res.status(400).json({
@@ -146,11 +151,9 @@ exports.addMultipleStocks = async (req, res) => {
       });
     }
 
-    // Import the ProductCategory model to check if categories exist
     const ProductCategory = require("../models/ProductCategory");
     const ProductType = require("../models/ProductType");
 
-    // Process each item
     const processedStockData = [];
 
     for (let i = 0; i < stockData.length; i++) {
@@ -168,7 +171,6 @@ exports.addMultipleStocks = async (req, res) => {
         weatherTemperature: item.weatherTemperature,
       });
 
-      // Check for required fields
       if (
         !item.date ||
         !item.productType ||
@@ -184,13 +186,11 @@ exports.addMultipleStocks = async (req, res) => {
         });
       }
 
-      // Find or create ProductType
       let productTypeId;
       const productType = await ProductType.findOne({ name: item.productType });
       if (productType) {
         productTypeId = productType._id;
       } else {
-        // Create new ProductType if it doesn't exist
         const newProductType = new ProductType({
           name: item.productType,
           hasSubcategory: false,
@@ -200,19 +200,16 @@ exports.addMultipleStocks = async (req, res) => {
         console.log(`Created new ProductType: ${item.productType}`);
       }
 
-      // Find or create ProductCategory
       let productCategoryName =
         item.productCategory?.trim() || item.productName?.trim() || "General";
       let productCategory;
 
-      // Try to find existing category
       productCategory = await ProductCategory.findOne({
         name: productCategoryName,
         productType: productTypeId,
       });
 
       if (!productCategory) {
-        // Create new ProductCategory
         productCategory = new ProductCategory({
           name: productCategoryName,
           productType: productTypeId,
@@ -223,12 +220,10 @@ exports.addMultipleStocks = async (req, res) => {
         );
       }
 
-      // Validate quantities
       const totalStock = Number(item.totalStock) || 0;
       const returnQty = Number(item.returnQty) || 0;
       const soldQty = Math.max(0, totalStock - returnQty);
 
-      // Handle weather data
       const weatherHighTempValue =
         item.weatherHighTemp !== undefined
           ? item.weatherHighTemp
@@ -239,9 +234,11 @@ exports.addMultipleStocks = async (req, res) => {
           : item.weatherTemperature;
 
       processedStockData.push({
-        date: new Date(item.date),
-        productType: item.productType.trim(), // String field
-        productCategory: productCategoryName, // String field (name, not ID)
+        date: new Date(
+          Date.UTC(...item.date.split("-").map(Number), 0, 0, 0, 0),
+        ), // store as UTC midnight
+        productType: item.productType.trim(),
+        productCategory: productCategoryName,
         productSubCategory: item.productSubCategory?.trim() || "",
         totalStock: totalStock,
         soldQty: soldQty,
@@ -255,45 +252,40 @@ exports.addMultipleStocks = async (req, res) => {
         weatherLowTemp: weatherLowTempValue,
         weatherDescription:
           item.weatherDescription?.trim() || "No weather data",
-        weatherTemperature: item.weatherTemperature || weatherHighTempValue, // For backward compatibility
+        weatherTemperature: item.weatherTemperature || weatherHighTempValue,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
     }
 
-    // Delete existing stock entries for the same date and location
+    // Delete existing stock entries for the same date and location using UTC range
     if (processedStockData.length > 0) {
       const firstItem = processedStockData[0];
-      const date = new Date(firstItem.date);
-
-      const startOfDay = new Date(date);
-      startOfDay.setHours(0, 0, 0, 0);
-
-      const endOfDay = new Date(date);
-      endOfDay.setHours(23, 59, 59, 999);
+      const dateStr = firstItem.date.toISOString().split("T")[0];
+      const { start, end } = getUTCDayRange(dateStr);
 
       await Stock.deleteMany({
-        date: { $gte: startOfDay, $lte: endOfDay },
+        date: { $gte: start, $lte: end },
         location: firstItem.location,
       });
       console.log(
-        `Cleared existing stock for ${date.toDateString()} at ${firstItem.location}`,
+        `Cleared existing stock for ${dateStr} at ${firstItem.location} using UTC range`,
       );
     }
 
-    // Insert all items
     const savedStocks = await Stock.insertMany(processedStockData);
 
     console.log(`Successfully saved ${savedStocks.length} stock items`);
 
-    // Return the saved items
+    console.log("Sample saved item location:", savedStocks[0]?.location);
+
     const response = savedStocks.map((stock) => ({
       _id: stock._id,
       id: stock._id,
       date: stock.date,
       productType: stock.productType,
-      productName: stock.productCategory, // For frontend compatibility
-      productCategory: stock.productCategory, // The actual category name
+      productName: stock.productCategory,
+      productCategory: stock.productCategory,
       productSubCategory: stock.productSubCategory,
       totalStock: stock.totalStock,
       soldQty: stock.soldQty,
@@ -311,6 +303,8 @@ exports.addMultipleStocks = async (req, res) => {
 
     console.log("Sample response item:", JSON.stringify(response[0], null, 2));
 
+    console.log("Sample saved item location:", savedStocks[0]?.location);
+
     res.status(201).json({
       message: `${savedStocks.length} stock items created successfully`,
       stocks: response,
@@ -325,31 +319,24 @@ exports.addMultipleStocks = async (req, res) => {
 // @desc    Get stocks for a specific date and location
 exports.getDailyStocks = async (req, res) => {
   try {
-    const { date, location } = req.query;
-
-    if (!date || !location) {
-      return res.status(400).json({
-        message: "Date and location are required",
-      });
+    const { date, location: rawLocation } = req.query;
+    if (!date || !rawLocation) {
+      return res
+        .status(400)
+        .json({ message: "Date and location are required" });
     }
+    const location = rawLocation.trim(); // ✅ new variable
 
-    // Parse date and set to start/end of day
-    const queryDate = new Date(date);
-    const startOfDay = new Date(queryDate);
-    startOfDay.setHours(0, 0, 0, 0);
+    // Use UTC day range
+    const { start, end } = getUTCDayRange(date);
 
-    const endOfDay = new Date(queryDate);
-    endOfDay.setHours(23, 59, 59, 999);
-
-    // Build query
     const query = {
-      date: { $gte: startOfDay, $lte: endOfDay },
+      date: { $gte: start, $lte: end },
       location: location,
     };
 
-    console.log("Daily stocks query:", query);
+    console.log("Daily stocks query (UTC):", query);
 
-    // Get stocks sorted
     const stocks = await Stock.find(query).sort({
       productType: 1,
       productCategory: 1,
@@ -358,14 +345,13 @@ exports.getDailyStocks = async (req, res) => {
 
     console.log(`Found ${stocks.length} stocks for ${date} at ${location}`);
 
-    // Transform response - use the actual productCategory field from Stock
     const transformedStocks = stocks.map((stock) => ({
       _id: stock._id,
       id: stock._id,
       date: stock.date,
       productType: stock.productType,
-      productName: stock.productCategory, // For frontend compatibility
-      productCategory: stock.productCategory, // Use the string from Stock model
+      productName: stock.productCategory,
+      productCategory: stock.productCategory,
       productSubCategory: stock.productSubCategory,
       totalStock: stock.totalStock,
       soldQty: stock.soldQty,
@@ -383,23 +369,15 @@ exports.getDailyStocks = async (req, res) => {
       updatedAt: stock.updatedAt,
     }));
 
-    // Log first item for debugging
-    if (transformedStocks.length > 0) {
-      console.log("First stock item from database:", {
-        productType: transformedStocks[0].productType,
-        productCategory: transformedStocks[0].productCategory,
-        productName: transformedStocks[0].productName,
-        weatherCondition: transformedStocks[0].weatherCondition,
-        weatherHighTemp: transformedStocks[0].weatherHighTemp,
-        weatherLowTemp: transformedStocks[0].weatherLowTemp,
-        weatherDescription: transformedStocks[0].weatherDescription,
-      });
-    }
-
     res.json(transformedStocks);
   } catch (err) {
     console.error("Error fetching daily stocks:", err);
-    res.status(500).json({ message: err.message });
+    // Return a 500 error with a clear message
+    res.status(500).json({
+      message:
+        "Database connection error. Please check your network and try again.",
+      error: err.message,
+    });
   }
 };
 
@@ -419,10 +397,8 @@ exports.getAllStocks = async (req, res) => {
       sortOrder = "desc",
     } = req.query;
 
-    // Build query
     const query = {};
 
-    // Date range filter
     if (startDate || endDate) {
       query.date = {};
       if (startDate) {
@@ -437,40 +413,32 @@ exports.getAllStocks = async (req, res) => {
       }
     }
 
-    // Location filter
     if (location) {
       query.location = location;
     }
 
-    // Product type filter
     if (productType) {
       query.productType = productType;
     }
 
-    // Product name filter
     if (productName) {
       query.productName = { $regex: productName, $options: "i" };
     }
 
-    // Pagination
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
 
-    // Sorting
     const sort = {};
     sort[sortBy] = sortOrder === "desc" ? -1 : 1;
 
-    // Get total count for pagination
     const total = await Stock.countDocuments(query);
 
-    // Get stocks
     const stocks = await Stock.find(query)
       .sort(sort)
       .skip(skip)
       .limit(limitNum);
 
-    // Transform data for frontend
     const transformedStocks = stocks.map((stock) => ({
       id: stock._id,
       date: stock.date,
@@ -514,10 +482,8 @@ exports.getSummary = async (req, res) => {
   try {
     const { startDate, endDate, location } = req.query;
 
-    // Build query
     const query = {};
 
-    // Date range filter
     if (startDate || endDate) {
       query.date = {};
       if (startDate) {
@@ -532,15 +498,12 @@ exports.getSummary = async (req, res) => {
       }
     }
 
-    // Location filter
     if (location) {
       query.location = location;
     }
 
-    // Get all stocks matching query
     const stocks = await Stock.find(query);
 
-    // Calculate summary
     const summary = {
       totalItems: stocks.length,
       totalStock: 0,
@@ -553,13 +516,11 @@ exports.getSummary = async (req, res) => {
     };
 
     stocks.forEach((stock) => {
-      // Totals
       summary.totalStock += stock.totalStock || 0;
       summary.totalSold += stock.soldQty || 0;
       summary.totalReturned += stock.returnQty || 0;
       summary.totalRemaining += stock.remainingQty || 0;
 
-      // By product type
       const productType = stock.productType || "Unknown";
       if (!summary.byProductType[productType]) {
         summary.byProductType[productType] = {
@@ -577,7 +538,6 @@ exports.getSummary = async (req, res) => {
       summary.byProductType[productType].totalRemaining +=
         stock.remainingQty || 0;
 
-      // By location
       const location = stock.location || "Unknown";
       if (!summary.byLocation[location]) {
         summary.byLocation[location] = {
@@ -594,7 +554,6 @@ exports.getSummary = async (req, res) => {
       summary.byLocation[location].totalReturned += stock.returnQty || 0;
       summary.byLocation[location].totalRemaining += stock.remainingQty || 0;
 
-      // By date
       const dateStr = stock.date.toISOString().split("T")[0];
       if (!summary.byDate[dateStr]) {
         summary.byDate[dateStr] = {
@@ -612,7 +571,6 @@ exports.getSummary = async (req, res) => {
       summary.byDate[dateStr].totalRemaining += stock.remainingQty || 0;
     });
 
-    // Convert objects to arrays for easier consumption
     summary.byProductType = Object.entries(summary.byProductType).map(
       ([type, data]) => ({
         productType: type,
@@ -651,13 +609,14 @@ exports.getStocksByDateRange = async (req, res) => {
       });
     }
 
-    const start = new Date(startDate);
-    start.setHours(0, 0, 0, 0);
+    // Convert to UTC ranges
+    const start = new Date(
+      Date.UTC(...startDate.split("-").map(Number), 0, 0, 0, 0),
+    );
+    const end = new Date(
+      Date.UTC(...endDate.split("-").map(Number), 23, 59, 59, 999),
+    );
 
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999);
-
-    // Build query
     const query = {
       date: { $gte: start, $lte: end },
     };
@@ -668,11 +627,9 @@ exports.getStocksByDateRange = async (req, res) => {
 
     const stocks = await Stock.find(query).sort({ date: 1 });
 
-    // Group data based on groupBy parameter
     let groupedData;
 
     if (groupBy === "day") {
-      // Group by day
       groupedData = stocks.reduce((acc, stock) => {
         const dateStr = stock.date.toISOString().split("T")[0];
 
@@ -708,14 +665,12 @@ exports.getStocksByDateRange = async (req, res) => {
         return acc;
       }, {});
 
-      // Convert to array and add location count
       groupedData = Object.values(groupedData).map((item) => ({
         ...item,
         locationCount: item.locations.size,
         locations: Array.from(item.locations),
       }));
     } else if (groupBy === "product") {
-      // Group by product
       groupedData = stocks.reduce((acc, stock) => {
         const productKey = `${stock.productType}-${stock.productName}`;
 
@@ -743,7 +698,6 @@ exports.getStocksByDateRange = async (req, res) => {
         return acc;
       }, {});
 
-      // Convert to array and add counts
       groupedData = Object.values(groupedData).map((item) => ({
         ...item,
         dayCount: item.days.size,
@@ -752,7 +706,6 @@ exports.getStocksByDateRange = async (req, res) => {
         locations: Array.from(item.locations),
       }));
     } else if (groupBy === "location") {
-      // Group by location
       groupedData = stocks.reduce((acc, stock) => {
         const location = stock.location || "Unknown";
 
@@ -788,7 +741,6 @@ exports.getStocksByDateRange = async (req, res) => {
         return acc;
       }, {});
 
-      // Convert to array and add product type count
       groupedData = Object.values(groupedData).map((item) => ({
         ...item,
         productTypeCount: item.productTypes.size,
@@ -812,22 +764,12 @@ exports.getStocksByDateRange = async (req, res) => {
 // @desc    Get unique product options for dropdowns
 exports.getProductOptions = async (req, res) => {
   try {
-    // Get unique product types
     const productTypes = await Stock.distinct("productType");
-
-    // Get unique product names
     const productNames = await Stock.distinct("productName");
-
-    // Get unique product subcategories
     const productSubCategories = await Stock.distinct("productSubCategory");
-
-    // Get unique locations
     const locations = await Stock.distinct("location");
-
-    // Get unique units
     const units = await Stock.distinct("unit");
 
-    // Get product name by type mapping
     const productsByType = {};
     for (const type of productTypes) {
       const names = await Stock.distinct("productName", { productType: type });
@@ -854,7 +796,6 @@ exports.getStockById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Validate ID format
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ message: "Invalid stock ID format" });
     }
@@ -899,18 +840,15 @@ exports.updateStock = async (req, res) => {
     const { id } = req.params;
     const updateData = req.body;
 
-    // Validate ID format
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ message: "Invalid stock ID format" });
     }
 
-    // Check if stock exists
     const existingStock = await Stock.findById(id);
     if (!existingStock) {
       return res.status(404).json({ message: "Stock not found" });
     }
 
-    // Validate that sold and returned don't exceed total stock
     if (
       updateData.soldQty !== undefined &&
       updateData.returnQty !== undefined &&
@@ -923,7 +861,6 @@ exports.updateStock = async (req, res) => {
       }
     }
 
-    // Calculate remaining quantity if totalStock, soldQty, or returnQty are updated
     if (
       updateData.totalStock !== undefined ||
       updateData.soldQty !== undefined ||
@@ -945,13 +882,11 @@ exports.updateStock = async (req, res) => {
       updateData.remainingQty = totalStock - soldQty - returnQty;
     }
 
-    // Handle weather data updates
     if (
       updateData.weatherHighTemp !== undefined ||
       updateData.weatherLowTemp !== undefined ||
       updateData.weatherTemperature !== undefined
     ) {
-      // If weatherTemperature is provided but not high/low, use it for both
       if (
         updateData.weatherTemperature !== undefined &&
         updateData.weatherHighTemp === undefined
@@ -965,7 +900,6 @@ exports.updateStock = async (req, res) => {
         updateData.weatherLowTemp = updateData.weatherTemperature;
       }
 
-      // If high/low are provided but temperature isn't, use high for temperature
       if (
         updateData.weatherHighTemp !== undefined &&
         updateData.weatherTemperature === undefined
@@ -974,7 +908,6 @@ exports.updateStock = async (req, res) => {
       }
     }
 
-    // Update stock
     const updatedStock = await Stock.findByIdAndUpdate(
       id,
       { ...updateData, updatedAt: new Date() },
@@ -1026,18 +959,15 @@ exports.deleteStock = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Validate ID format
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ message: "Invalid stock ID format" });
     }
 
-    // Check if stock exists
     const stock = await Stock.findById(id);
     if (!stock) {
       return res.status(404).json({ message: "Stock not found" });
     }
 
-    // Delete stock
     await Stock.findByIdAndDelete(id);
 
     res.json({
