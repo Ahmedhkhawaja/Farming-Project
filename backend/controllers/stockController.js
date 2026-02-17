@@ -233,10 +233,11 @@ exports.addMultipleStocks = async (req, res) => {
           ? item.weatherLowTemp
           : item.weatherTemperature;
 
+
+          const [year, month, day] = item.date.split("-").map(Number);
       processedStockData.push({
-        date: new Date(
-          Date.UTC(...item.date.split("-").map(Number), 0, 0, 0, 0),
-        ), // store as UTC midnight
+  
+       date: new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0)),
         productType: item.productType.trim(),
         productCategory: productCategoryName,
         productSubCategory: item.productSubCategory?.trim() || "",

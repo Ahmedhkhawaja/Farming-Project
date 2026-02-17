@@ -562,7 +562,7 @@ const AddStock = () => {
           returnQty: returnQty,
           remainingQty: returnQty,
           unit: item.unit?.trim() || "pieces",
-          location: marketLocation?.trim() || "Unknown",
+          location: marketLocation.trim() || "Unknown",
           notes: `Weather: ${weatherCondition} (H:${weatherHighTemp}°C/L:${weatherLowTemp}°C)`,
           weatherCondition: weatherCondition,
           weatherHighTemp: weatherHighTemp,
@@ -615,7 +615,7 @@ const AddStock = () => {
     const res = await api.get("/stocks/daily", {
       params: {
         date: formattedDate,
-        location: marketLocation.trim()
+        location: marketLocation
       }
     });
 
