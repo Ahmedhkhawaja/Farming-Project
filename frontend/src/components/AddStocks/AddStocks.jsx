@@ -1,4 +1,4 @@
-// AddStock.jsx - Updated with requested changes
+// AddStock.jsx - Updated with requested changes + Notes field near Save button
 import React, { useState, useEffect } from 'react';
 import {
   TextField,
@@ -144,9 +144,13 @@ const AddStock = () => {
 
   const WEATHER_API_KEY = process.env.REACT_APP_WEATHER_API_KEY || '11429cda8c44fbbbcfcbcddf66aeba13';
 
+  // New state for optional notes (e.g., low sales reason)
+  const [salesNotes, setSalesNotes] = useState('');
+
   // Load saved stocks when date or location changes
   useEffect(() => {
     if (selectedDate && marketLocation) {
+      setSalesNotes(''); // Clear notes when switching date/location
       fetchSavedStocks();
     }
   }, [selectedDate, marketLocation]);
@@ -532,6 +536,12 @@ const AddStock = () => {
         weatherDescription = weather.description || weather.main;
       }
 
+      // Build notes string: weather info + optional user notes
+      let notesWithWeather = `Weather: ${weatherCondition} (H:${weatherHighTemp}°C/L:${weatherLowTemp}°C)`;
+      if (salesNotes.trim()) {
+        notesWithWeather += ` | Notes: ${salesNotes.trim()}`;
+      }
+
       const formattedDate = formatDateForAPI(selectedDate);
 
       const stockData = stockItems.map((item, index) => {
@@ -563,7 +573,7 @@ const AddStock = () => {
           remainingQty: returnQty,
           unit: item.unit?.trim() || "pieces",
           location: marketLocation.trim() || "Unknown",
-          notes: `Weather: ${weatherCondition} (H:${weatherHighTemp}°C/L:${weatherLowTemp}°C)`,
+          notes: notesWithWeather,  // Updated to include user notes
           weatherCondition: weatherCondition,
           weatherHighTemp: weatherHighTemp,
           weatherLowTemp: weatherLowTemp,
@@ -632,6 +642,22 @@ const AddStock = () => {
         }));
 
         setStockItems(mapped);
+
+         // Extract user notes from the first item's notes field
+      if (res.data[0] && res.data[0].notes) {
+        const fullNotes = res.data[0].notes;
+        // Notes format: "Weather: ... | Notes: ..." or just "Weather: ..."
+        const notesParts = fullNotes.split(' | Notes: ');
+        if (notesParts.length > 1) {
+          setSalesNotes(notesParts[1]); // user notes part
+        } else {
+          setSalesNotes(''); // No user notes saved
+        }
+      } else {
+        setSalesNotes('');
+      }
+
+        
       } else {
         const defaultItems = defaultProductsTemplate.map((product, index) => ({
           id: `default-${index}-${Date.now()}`,
@@ -645,6 +671,7 @@ const AddStock = () => {
         }));
 
         setStockItems(defaultItems);
+        setSalesNotes('');
       }
     } catch (err) {
       console.error("Error fetching saved stocks:", err);
@@ -662,6 +689,7 @@ const AddStock = () => {
       }));
 
       setStockItems(defaultItems);
+      setSalesNotes('');
     } finally {
       setLoading(false);
     }
@@ -1006,8 +1034,19 @@ const AddStock = () => {
                     </Box>
                   )}
 
+                  {/* New Notes TextArea near Save Button */}
+                  <TextField
+                    label="Notes (optional) - e.g., reason for low sales"
+                    multiline
+                    rows={2}
+                    fullWidth
+                    value={salesNotes}
+                    onChange={(e) => setSalesNotes(e.target.value)}
+                    sx={{ mb: 2 }}
+                  />
+
                   {/* Save Button */}
-                  <Box sx={{ mt: 3, display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
+                  <Box sx={{ mt: 1, display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
                     <Button
                       variant="contained"
                       color="primary"
