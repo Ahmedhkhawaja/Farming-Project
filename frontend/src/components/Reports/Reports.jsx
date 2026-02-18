@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Paper,
   Typography,
@@ -24,10 +24,8 @@ import {
   Checkbox,
   ListItemText,
   Chip,
-  Autocomplete,
   TextField,
-  Slider,
-  Divider
+  Slider
 } from "@mui/material";
 import {
   BarChart,
@@ -38,16 +36,11 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-  LineChart,
-  Line,
-  PieChart,
-  Pie,
-  Cell,
   ComposedChart,
   Area,
   ScatterChart,
   Scatter,
-  ZAxis,  // Make sure this is imported
+  ZAxis,
   ReferenceLine
 } from 'recharts';
 import api from '../../services/api';
@@ -57,8 +50,11 @@ import UmbrellaIcon from '@mui/icons-material/Umbrella';
 import AcUnitIcon from '@mui/icons-material/AcUnit';
 import ThunderstormIcon from '@mui/icons-material/Thunderstorm';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';   // <-- FIXED: import autoTable as a function
 
-// Market locations (same as in AddStock.jsx)
+// Market locations
 const marketLocations = [
   { name: 'Union Square (Monday) Manhattan' },
   { name: 'Union Square (Wednesday) Manhattan' },
@@ -70,7 +66,6 @@ const marketLocations = [
   { name: 'Jackson Heights (Sunday) Queens' }
 ];
 
-// Months for selection
 const months = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'
@@ -79,73 +74,55 @@ const months = [
 const currentYear = new Date().getFullYear();
 const years = Array.from({ length: 10 }, (_, i) => currentYear - 5 + i);
 
-// Product Types from ProductManagement
 const productTypes = ['Greens', 'Kitchen'];
 
-// Colors for charts
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D', '#FF6B6B', '#4ECDC4'];
 
-// Weather condition icons mapping
+// Weather icon helpers (original)
 const getWeatherIcon = (condition) => {
   if (!condition) return null;
-  
   const conditionLower = condition.toLowerCase();
-  
-  if (conditionLower.includes('sunny') || conditionLower.includes('clear')) 
+  if (conditionLower.includes('sunny') || conditionLower.includes('clear'))
     return <WbSunnyIcon sx={{ color: '#FFD700' }} />;
-  if (conditionLower.includes('cloud')) 
+  if (conditionLower.includes('cloud'))
     return <CloudIcon sx={{ color: '#A9A9A9' }} />;
-  if (conditionLower.includes('rain') || conditionLower.includes('drizzle')) 
+  if (conditionLower.includes('rain') || conditionLower.includes('drizzle'))
     return <UmbrellaIcon sx={{ color: '#4169E1' }} />;
-  if (conditionLower.includes('snow') || conditionLower.includes('sleet')) 
+  if (conditionLower.includes('snow') || conditionLower.includes('sleet'))
     return <AcUnitIcon sx={{ color: '#87CEEB' }} />;
-  if (conditionLower.includes('thunder')) 
+  if (conditionLower.includes('thunder'))
     return <ThunderstormIcon sx={{ color: '#4B0082' }} />;
-  
   return <WbSunnyIcon sx={{ color: '#FFD700' }} />;
 };
 
-// Get weather impact color based on condition
 const getWeatherImpactColor = (condition) => {
   if (!condition) return '#ccc';
-  
   const conditionLower = condition.toLowerCase();
-  
-  if (conditionLower.includes('sunny') || conditionLower.includes('clear')) 
+  if (conditionLower.includes('sunny') || conditionLower.includes('clear'))
     return '#FFD700';
-  if (conditionLower.includes('cloud')) 
+  if (conditionLower.includes('cloud'))
     return '#A9A9A9';
-  if (conditionLower.includes('rain') || conditionLower.includes('drizzle')) 
+  if (conditionLower.includes('rain') || conditionLower.includes('drizzle'))
     return '#4169E1';
-  if (conditionLower.includes('snow') || conditionLower.includes('sleet')) 
+  if (conditionLower.includes('snow') || conditionLower.includes('sleet'))
     return '#87CEEB';
-  if (conditionLower.includes('thunder')) 
+  if (conditionLower.includes('thunder'))
     return '#4B0082';
   if (conditionLower.includes('fog') || conditionLower.includes('mist'))
     return '#B0C4DE';
-  
   return '#FFD700';
 };
 
 const Reports = () => {
-  // Tab state
   const [activeTab, setActiveTab] = useState(0);
-  
-  // Common filter states
   const [selectedLocation, setSelectedLocation] = useState(marketLocations[0].name);
   const [selectedMonth, setSelectedMonth] = useState(months[new Date().getMonth()]);
   const [selectedYear, setSelectedYear] = useState(currentYear.toString());
   const [selectedProductType, setSelectedProductType] = useState('Greens');
-  
-  // Location Comparison specific states
   const [selectedLocations, setSelectedLocations] = useState([marketLocations[0].name]);
-  
-  // Annual Comparison specific states
   const [selectedYearFirst, setSelectedYearFirst] = useState((currentYear - 1).toString());
   const [selectedYearSecond, setSelectedYearSecond] = useState(currentYear.toString());
-  
-  // Weather Impact Analysis specific states
-  const [lowSalesThreshold, setLowSalesThreshold] = useState(50); // Percentage threshold for low sales
+  const [lowSalesThreshold, setLowSalesThreshold] = useState(50);
   const [weatherImpactData, setWeatherImpactData] = useState([]);
   const [lowSalesDays, setLowSalesDays] = useState([]);
   const [weatherSummary, setWeatherSummary] = useState({
@@ -155,81 +132,73 @@ const Reports = () => {
     avgTemp: 0,
     weatherImpact: {}
   });
-  
-  // Data states for different reports
+
+  // Daily Report states
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const today = new Date();
+    return today.toISOString().split('T')[0];
+  });
+  const [dailyChartData, setDailyChartData] = useState([]);
+  const [dailySummary, setDailySummary] = useState({
+    totalCategories: 0,
+    totalStock: 0,
+    totalReturned: 0
+  });
+
+  // Data states for other reports
   const [monthlyChartData, setMonthlyChartData] = useState([]);
   const [productWiseData, setProductWiseData] = useState([]);
   const [locationComparisonData, setLocationComparisonData] = useState([]);
   const [annualComparisonData, setAnnualComparisonData] = useState([]);
-  
+
   // Summary states
   const [monthlySummary, setMonthlySummary] = useState({
     totalProductsQty: 0,
     totalReturnedQty: 0,
     totalSoldQty: 0
   });
-  
   const [annualComparisonSummary, setAnnualComparisonSummary] = useState({
     firstYear: { totalSales: 0, avgSales: 0, growth: 0 },
     secondYear: { totalSales: 0, avgSales: 0, growth: 0 }
   });
-  
   const [productSummary, setProductSummary] = useState([]);
-  
-  // UI states
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  // Function to convert month name to number (1-12)
-  const getMonthNumber = (monthName) => {
-    return months.indexOf(monthName) + 1;
-  };
+  const prevActiveTabRef = useRef(activeTab);
 
-  // Function to get start and end dates for the selected month/year
+  // Helper functions
+  const getMonthNumber = (monthName) => months.indexOf(monthName) + 1;
+
   const getMonthDateRange = (monthName, year) => {
     const monthNumber = getMonthNumber(monthName);
     const yearNum = parseInt(year);
-    
     const startDate = new Date(yearNum, monthNumber - 1, 1);
     const endDate = new Date(yearNum, monthNumber, 0);
-    
     const formatDate = (date) => {
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
     };
-    
-    return {
-      startDate: formatDate(startDate),
-      endDate: formatDate(endDate)
-    };
+    return { startDate: formatDate(startDate), endDate: formatDate(endDate) };
   };
 
-  // Handle tab change
-  const handleTabChange = (event, newValue) => {
-    setActiveTab(newValue);
-  };
+  const handleTabChange = (event, newValue) => setActiveTab(newValue);
 
-  // Handle multiple location selection for Location Comparison
   const handleLocationMultiSelect = (event) => {
-    const {
-      target: { value },
-    } = event;
-    setSelectedLocations(
-      typeof value === 'string' ? value.split(',') : value,
-    );
+    const { value } = event.target;
+    setSelectedLocations(typeof value === 'string' ? value.split(',') : value);
   };
 
-  // Generate Monthly Sales Report
+  // --- Original report generation functions (restored) ---
   const generateMonthlyReport = async () => {
     try {
       setLoading(true);
       setError("");
-      
       const { startDate, endDate } = getMonthDateRange(selectedMonth, selectedYear);
-      
       const response = await api.get("/reports/sales-by-location", {
         params: {
           location: selectedLocation,
@@ -237,26 +206,22 @@ const Reports = () => {
           endDate
         }
       });
-      
       if (response.data && response.data.length > 0) {
         const processedData = response.data.map(item => ({
-          date: new Date(item.date).toLocaleDateString('en-US', { 
-            month: 'short', 
-            day: 'numeric' 
+          date: new Date(item.date).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric'
           }),
           totalStock: item.totalStock || 0,
           returnQty: item.returnQty || 0,
           soldQty: item.soldQty || 0
         }));
-        
         setMonthlyChartData(processedData);
-        
         const totals = processedData.reduce((acc, item) => ({
           totalProductsQty: acc.totalProductsQty + (item.totalStock || 0),
           totalReturnedQty: acc.totalReturnedQty + (item.returnQty || 0),
           totalSoldQty: acc.totalSoldQty + (item.soldQty || 0)
         }), { totalProductsQty: 0, totalReturnedQty: 0, totalSoldQty: 0 });
-        
         setMonthlySummary(totals);
         setSuccess(`Monthly report generated for ${selectedLocation} - ${selectedMonth} ${selectedYear}`);
       } else {
@@ -264,7 +229,6 @@ const Reports = () => {
         setMonthlySummary({ totalProductsQty: 0, totalReturnedQty: 0, totalSoldQty: 0 });
         setSuccess(`No data found for ${selectedLocation} - ${selectedMonth} ${selectedYear}`);
       }
-      
     } catch (err) {
       console.error("Monthly report error:", err);
       setError(`Error generating monthly report: ${err.response?.data?.message || err.message}`);
@@ -273,14 +237,11 @@ const Reports = () => {
     }
   };
 
-  // Generate Product-wise Report
   const generateProductReport = async () => {
     try {
       setLoading(true);
       setError("");
-      
       const { startDate, endDate } = getMonthDateRange(selectedMonth, selectedYear);
-      
       const response = await api.get("/reports/product-wise-returns", {
         params: {
           location: selectedLocation,
@@ -289,7 +250,6 @@ const Reports = () => {
           endDate
         }
       });
-      
       if (response.data && response.data.length > 0) {
         const mappedData = response.data.map(item => ({
           productName: item.category || item.productName || 'Unknown Product',
@@ -297,7 +257,6 @@ const Reports = () => {
           soldQty: Number(item.soldQty) || 0,
           returnQty: Number(item.returnQty) || 0
         }));
-        
         const sortedData = mappedData.sort((a, b) => b.returnQty - a.returnQty);
         setProductWiseData(sortedData);
         setSuccess(`Product-wise report generated for ${selectedLocation} - ${selectedMonth} ${selectedYear} - Type: ${selectedProductType}`);
@@ -305,7 +264,6 @@ const Reports = () => {
         setProductWiseData([]);
         setSuccess(`No product data found for ${selectedLocation} - ${selectedMonth} ${selectedYear} - Type: ${selectedProductType}`);
       }
-      
     } catch (err) {
       console.error("Product report error:", err);
       setError(`Error generating product report: ${err.response?.data?.message || err.message}`);
@@ -314,26 +272,20 @@ const Reports = () => {
     }
   };
 
-  // Generate Location Comparison Report
   const generateLocationReport = async () => {
     try {
       setLoading(true);
       setError("");
-      
       const monthNumber = getMonthNumber(selectedMonth);
       const yearNumber = parseInt(selectedYear);
-      
       const params = {
         month: monthNumber,
         year: yearNumber
       };
-      
       if (selectedLocations.length > 0 && selectedLocations.length < marketLocations.length) {
         params.locations = selectedLocations.join(',');
       }
-      
       const response = await api.get("/reports/location-comparison", { params });
-      
       if (response.data && response.data.length > 0) {
         const formattedData = response.data.map(item => ({
           location: item.location,
@@ -343,14 +295,12 @@ const Reports = () => {
           salesPercentage: item.salesPercentage || 0,
           revenue: item.revenue || 0
         }));
-        
         setLocationComparisonData(formattedData);
         setSuccess(`Location comparison report generated for ${selectedMonth} ${selectedYear}`);
       } else {
         setLocationComparisonData([]);
         setSuccess(`No location data found for ${selectedMonth} ${selectedYear}`);
       }
-      
     } catch (err) {
       console.error("Location report error:", err);
       setError(`Error generating location report: ${err.response?.data?.message || err.message}`);
@@ -359,17 +309,12 @@ const Reports = () => {
     }
   };
 
-  // Generate Annual Comparison Report
   const generateAnnualComparisonReport = async () => {
     try {
       setLoading(true);
       setError("");
-      
-      // Get data for first year
       const firstYearRange = getMonthDateRange(selectedMonth, selectedYearFirst);
       const secondYearRange = getMonthDateRange(selectedMonth, selectedYearSecond);
-      
-      // Fetch data for both years
       const [firstYearResponse, secondYearResponse] = await Promise.all([
         api.get("/reports/sales-by-location", {
           params: {
@@ -386,41 +331,31 @@ const Reports = () => {
           }
         })
       ]);
-      
-      // Process both years data
       const processYearData = (data, year) => {
         if (!data || !data.data || data.data.length === 0) {
           return [];
         }
-        
         return data.data.map(item => ({
           date: new Date(item.date).getDate(),
-          day: new Date(item.date).toLocaleDateString('en-US', { 
-            month: 'short', 
-            day: 'numeric' 
+          day: new Date(item.date).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric'
           }),
           [`sold_${year}`]: item.soldQty || 0,
           [`stock_${year}`]: item.totalStock || 0,
           [`return_${year}`]: item.returnQty || 0
         }));
       };
-      
       const firstYearData = processYearData(firstYearResponse, selectedYearFirst);
       const secondYearData = processYearData(secondYearResponse, selectedYearSecond);
-      
-      // Merge data by date
       const mergedData = [];
-      
-      // Get all unique days from both datasets
       const allDays = new Set([
         ...firstYearData.map(item => item.date),
         ...secondYearData.map(item => item.date)
       ]);
-      
       allDays.forEach(day => {
         const firstYearItem = firstYearData.find(item => item.date === day);
         const secondYearItem = secondYearData.find(item => item.date === day);
-        
         mergedData.push({
           date: day,
           day: `Day ${day}`,
@@ -430,37 +365,28 @@ const Reports = () => {
           [`stock_${selectedYearSecond}`]: secondYearItem?.[`stock_${selectedYearSecond}`] || 0
         });
       });
-      
-      // Sort by date
       mergedData.sort((a, b) => a.date - b.date);
-      
-      // Calculate summary
       const firstYearTotal = firstYearData.reduce((sum, item) => sum + item[`sold_${selectedYearFirst}`], 0);
       const secondYearTotal = secondYearData.reduce((sum, item) => sum + item[`sold_${selectedYearSecond}`], 0);
-      
       const firstYearAvg = firstYearData.length > 0 ? firstYearTotal / firstYearData.length : 0;
       const secondYearAvg = secondYearData.length > 0 ? secondYearTotal / secondYearData.length : 0;
-      
-      const growth = firstYearTotal > 0 
-        ? ((secondYearTotal - firstYearTotal) / firstYearTotal) * 100 
+      const growth = firstYearTotal > 0
+        ? ((secondYearTotal - firstYearTotal) / firstYearTotal) * 100
         : 0;
-      
       setAnnualComparisonSummary({
-        firstYear: { 
-          totalSales: firstYearTotal, 
-          avgSales: firstYearAvg, 
-          growth: 0 
+        firstYear: {
+          totalSales: firstYearTotal,
+          avgSales: firstYearAvg,
+          growth: 0
         },
-        secondYear: { 
-          totalSales: secondYearTotal, 
-          avgSales: secondYearAvg, 
-          growth: growth 
+        secondYear: {
+          totalSales: secondYearTotal,
+          avgSales: secondYearAvg,
+          growth: growth
         }
       });
-      
       setAnnualComparisonData(mergedData);
       setSuccess(`Annual comparison report generated for ${selectedLocation} - ${selectedMonth} ${selectedYearFirst} vs ${selectedYearSecond}`);
-      
     } catch (err) {
       console.error("Annual comparison error:", err);
       setError(`Error generating annual comparison report: ${err.response?.data?.message || err.message}`);
@@ -469,14 +395,11 @@ const Reports = () => {
     }
   };
 
-  // Generate Weather Impact Report
   const generateWeatherReport = async () => {
     try {
       setLoading(true);
       setError("");
-      
       const { startDate, endDate } = getMonthDateRange(selectedMonth, selectedYear);
-      
       const response = await api.get("/reports/sales-by-location", {
         params: {
           location: selectedLocation,
@@ -484,12 +407,10 @@ const Reports = () => {
           endDate
         }
       });
-      
       if (response.data && response.data.length > 0) {
-        // Process the data to include weather information
         const processedData = response.data.map(item => ({
-          date: new Date(item.date).toLocaleDateString('en-US', { 
-            month: 'short', 
+          date: new Date(item.date).toLocaleDateString('en-US', {
+            month: 'short',
             day: 'numeric',
             weekday: 'short'
           }),
@@ -503,22 +424,14 @@ const Reports = () => {
           weatherLowTemp: item.weatherLowTemp || null,
           weatherDescription: item.weatherDescription || 'No weather data',
           salesPercentage: item.totalStock > 0 ? ((item.soldQty || 0) / item.totalStock * 100).toFixed(1) : 0
-        })).filter(item => item.soldQty > 0); // Only include days with sales
-        
+        })).filter(item => item.soldQty > 0);
         setWeatherImpactData(processedData);
-        
-        // Calculate average sales for the month
         const avgSales = processedData.reduce((sum, item) => sum + item.soldQty, 0) / processedData.length;
-        
-        // Identify low sales days (below threshold percentage of average)
         const lowDays = processedData.filter(item => {
           const salesPercentage = (item.soldQty / avgSales) * 100;
           return salesPercentage < lowSalesThreshold;
         });
-        
         setLowSalesDays(lowDays);
-        
-        // Calculate weather impact summary
         const weatherImpactSummary = {};
         processedData.forEach(item => {
           const condition = item.weatherCondition || 'Unknown';
@@ -532,25 +445,18 @@ const Reports = () => {
           }
           weatherImpactSummary[condition].count++;
           weatherImpactSummary[condition].totalSales += item.soldQty;
-          
-          // Check if it's a low sales day for this weather condition
           if (lowDays.find(day => day.fullDate === item.fullDate)) {
             weatherImpactSummary[condition].lowSalesDays++;
           }
         });
-        
-        // Calculate averages
         Object.keys(weatherImpactSummary).forEach(condition => {
-          weatherImpactSummary[condition].avgSales = 
+          weatherImpactSummary[condition].avgSales =
             weatherImpactSummary[condition].totalSales / weatherImpactSummary[condition].count;
         });
-        
-        // Calculate average temperature
         const tempData = processedData.filter(item => item.weatherHighTemp !== null && item.weatherLowTemp !== null);
-        const avgTemp = tempData.length > 0 
+        const avgTemp = tempData.length > 0
           ? tempData.reduce((sum, item) => sum + ((item.weatherHighTemp + item.weatherLowTemp) / 2), 0) / tempData.length
           : 0;
-        
         setWeatherSummary({
           totalDays: processedData.length,
           lowSalesDaysCount: lowDays.length,
@@ -558,7 +464,6 @@ const Reports = () => {
           avgTemp: avgTemp,
           weatherImpact: weatherImpactSummary
         });
-        
         setSuccess(`Weather impact report generated for ${selectedLocation} - ${selectedMonth} ${selectedYear}. Found ${lowDays.length} days with low sales.`);
       } else {
         setWeatherImpactData([]);
@@ -572,7 +477,6 @@ const Reports = () => {
         });
         setSuccess(`No data found for ${selectedLocation} - ${selectedMonth} ${selectedYear}`);
       }
-      
     } catch (err) {
       console.error("Weather report error:", err);
       setError(`Error generating weather report: ${err.response?.data?.message || err.message}`);
@@ -581,35 +485,624 @@ const Reports = () => {
     }
   };
 
-  // Handle generate button based on active tab
+  // --- Daily Report generation (already present) ---
+  const generateDailyReport = async () => {
+    try {
+      setLoading(true);
+      setError("");
+      const response = await api.get("/reports/product-wise-returns", {
+        params: {
+          location: selectedLocation,
+          productType: selectedProductType,
+          startDate: selectedDate,
+          endDate: selectedDate
+        }
+      });
+      if (response.data && response.data.length > 0) {
+        const categoryMap = new Map();
+        response.data.forEach(item => {
+          const category = item.category || "Uncategorized";
+          if (!categoryMap.has(category)) {
+            categoryMap.set(category, { totalStock: 0, returnQty: 0 });
+          }
+          const catData = categoryMap.get(category);
+          catData.totalStock += item.totalStock || 0;
+          catData.returnQty += item.returnQty || 0;
+        });
+        const chartData = Array.from(categoryMap.entries()).map(([category, values]) => ({
+          category,
+          totalStock: values.totalStock,
+          returnQty: values.returnQty
+        })).sort((a, b) => b.totalStock - a.totalStock);
+        setDailyChartData(chartData);
+        const summary = chartData.reduce((acc, cat) => ({
+          totalCategories: acc.totalCategories + 1,
+          totalStock: acc.totalStock + cat.totalStock,
+          totalReturned: acc.totalReturned + cat.returnQty
+        }), { totalCategories: 0, totalStock: 0, totalReturned: 0 });
+        setDailySummary(summary);
+        setSuccess(`Daily report generated for ${selectedLocation} on ${selectedDate} (${selectedProductType})`);
+      } else {
+        setDailyChartData([]);
+        setDailySummary({ totalCategories: 0, totalStock: 0, totalReturned: 0 });
+        setSuccess(`No data found for ${selectedLocation} on ${selectedDate} (${selectedProductType})`);
+      }
+    } catch (err) {
+      console.error("Daily report error:", err);
+      setError(`Error generating daily report: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle generate button
   const handleGenerateReport = () => {
-    switch(activeTab) {
-      case 0: // Monthly Sales
+    switch (activeTab) {
+      case 0:
+        console.log('Calling generateMonthlyReport');
         generateMonthlyReport();
         break;
-      case 1: // Product-wise
+      case 1:
+        console.log('Calling generateProductReport');
         generateProductReport();
         break;
-      case 2: // Location Comparison
+      case 2:
+        console.log('Calling generateLocationReport');
         generateLocationReport();
         break;
-      case 3: // Annual Comparison
+      case 3:
+        console.log('Calling generateAnnualComparisonReport');
         generateAnnualComparisonReport();
         break;
-      case 4: // Weather Impact
+      case 4:
+        console.log('Calling generateWeatherReport');
         generateWeatherReport();
+        break;
+      case 5:
+        console.log('Calling generateDailyReport');
+        generateDailyReport();
         break;
       default:
         generateMonthlyReport();
     }
   };
 
-  // Initialize with first report
+  // Auto‑generate daily report when switching to its tab (once)
+  useEffect(() => {
+    if (activeTab === 5 && prevActiveTabRef.current !== 5) {
+      generateDailyReport();
+    }
+    prevActiveTabRef.current = activeTab;
+  }, [activeTab]);
+
+  // Auto‑generate monthly report on first load
   useEffect(() => {
     generateMonthlyReport();
   }, []);
 
-  // Render Monthly Sales Report (Tab 0)
+  // Clear success/error when tab changes (optional but nice)
+  useEffect(() => {
+    setSuccess("");
+    setError("");
+  }, [activeTab]);
+
+  // --- EXPORT FUNCTIONS (PDF FIXED) ---
+
+  // Monthly Report (Tab 0)
+  const exportMonthlyExcel = () => {
+    const wb = XLSX.utils.book_new();
+    const wsData = [];
+
+    wsData.push([`Monthly Sales Report - ${selectedLocation} - ${selectedMonth} ${selectedYear}`]);
+    wsData.push([]);
+    wsData.push(['Summary']);
+    wsData.push(['Total Products Quantity', monthlySummary.totalProductsQty]);
+    wsData.push(['Total Returned Quantity', monthlySummary.totalReturnedQty]);
+    wsData.push(['Total Sold Quantity', monthlySummary.totalSoldQty]);
+    wsData.push([]);
+    wsData.push(['Date', 'Total Stock', 'Returned Qty', 'Sold Qty']);
+
+    monthlyChartData.forEach(item => {
+      wsData.push([item.date, item.totalStock, item.returnQty, item.soldQty]);
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    XLSX.utils.book_append_sheet(wb, ws, 'Monthly Report');
+    XLSX.writeFile(wb, `Monthly_Report_${selectedLocation}_${selectedMonth}_${selectedYear}.xlsx`);
+  };
+
+  const exportMonthlyPDF = () => {
+    const doc = new jsPDF();
+    let y = 20;
+    doc.setFontSize(16);
+    doc.text('Monthly Sales Report', 14, y);
+    y += 10;
+    doc.setFontSize(12);
+    doc.text(`${selectedLocation} - ${selectedMonth} ${selectedYear}`, 14, y);
+    y += 10;
+
+    doc.setFontSize(14);
+    doc.text('Summary', 14, y);
+    y += 8;
+    doc.setFontSize(10);
+    doc.text(`Total Products Quantity: ${monthlySummary.totalProductsQty}`, 14, y);
+    y += 6;
+    doc.text(`Total Returned Quantity: ${monthlySummary.totalReturnedQty}`, 14, y);
+    y += 6;
+    doc.text(`Total Sold Quantity: ${monthlySummary.totalSoldQty}`, 14, y);
+    y += 10;
+
+    const tableColumn = ['Date', 'Total Stock', 'Returned Qty', 'Sold Qty'];
+    const tableRows = monthlyChartData.map(item => [item.date, item.totalStock, item.returnQty, item.soldQty]);
+
+    // FIXED: use autoTable(doc, options)
+    autoTable(doc, {
+      head: [tableColumn],
+      body: tableRows,
+      startY: y,
+      theme: 'striped',
+      headStyles: { fillColor: [41, 128, 185] },
+    });
+
+    doc.save(`Monthly_Report_${selectedLocation}_${selectedMonth}_${selectedYear}.pdf`);
+  };
+
+  // Product Wise Report (Tab 1)
+  const exportProductExcel = () => {
+    const wb = XLSX.utils.book_new();
+    const wsData = [];
+
+    wsData.push([`Product-wise Report - ${selectedLocation} - ${selectedMonth} ${selectedYear} - Type: ${selectedProductType}`]);
+    wsData.push([]);
+    wsData.push(['Summary']);
+    const totalStock = productWiseData.reduce((acc, p) => acc + p.totalStock, 0);
+    const totalReturned = productWiseData.reduce((acc, p) => acc + p.returnQty, 0);
+    const totalSold = productWiseData.reduce((acc, p) => acc + p.soldQty, 0);
+    wsData.push(['Total Products', productWiseData.length]);
+    wsData.push(['Total Stock', totalStock]);
+    wsData.push(['Total Returned', totalReturned]);
+    wsData.push(['Return Rate', totalStock > 0 ? `${((totalReturned / totalStock) * 100).toFixed(1)}%` : '0%']);
+    wsData.push([]);
+    wsData.push(['Product Name', 'Total Stock', 'Sold Qty', 'Returned Qty', 'Return Rate (%)', 'Sales Rate (%)']);
+
+    productWiseData.forEach(p => {
+      const returnRate = p.totalStock > 0 ? ((p.returnQty / p.totalStock) * 100).toFixed(1) : 0;
+      const salesRate = p.totalStock > 0 ? ((p.soldQty / p.totalStock) * 100).toFixed(1) : 0;
+      wsData.push([p.productName, p.totalStock, p.soldQty, p.returnQty, returnRate, salesRate]);
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    XLSX.utils.book_append_sheet(wb, ws, 'Product Report');
+    XLSX.writeFile(wb, `Product_Report_${selectedLocation}_${selectedMonth}_${selectedYear}.xlsx`);
+  };
+
+  const exportProductPDF = () => {
+    const doc = new jsPDF();
+    let y = 20;
+    doc.setFontSize(16);
+    doc.text('Product-wise Report', 14, y);
+    y += 10;
+    doc.setFontSize(12);
+    doc.text(`${selectedLocation} - ${selectedMonth} ${selectedYear} - Type: ${selectedProductType}`, 14, y);
+    y += 10;
+
+    const totalStock = productWiseData.reduce((acc, p) => acc + p.totalStock, 0);
+    const totalReturned = productWiseData.reduce((acc, p) => acc + p.returnQty, 0);
+    const totalSold = productWiseData.reduce((acc, p) => acc + p.soldQty, 0);
+
+    doc.setFontSize(14);
+    doc.text('Summary', 14, y);
+    y += 8;
+    doc.setFontSize(10);
+    doc.text(`Total Products: ${productWiseData.length}`, 14, y);
+    y += 6;
+    doc.text(`Total Stock: ${totalStock}`, 14, y);
+    y += 6;
+    doc.text(`Total Returned: ${totalReturned}`, 14, y);
+    y += 6;
+    doc.text(`Return Rate: ${totalStock > 0 ? ((totalReturned / totalStock) * 100).toFixed(1) : 0}%`, 14, y);
+    y += 10;
+
+    const tableColumn = ['Product Name', 'Total Stock', 'Sold Qty', 'Returned Qty', 'Return Rate %', 'Sales Rate %'];
+    const tableRows = productWiseData.map(p => {
+      const returnRate = p.totalStock > 0 ? ((p.returnQty / p.totalStock) * 100).toFixed(1) : 0;
+      const salesRate = p.totalStock > 0 ? ((p.soldQty / p.totalStock) * 100).toFixed(1) : 0;
+      return [p.productName, p.totalStock, p.soldQty, p.returnQty, returnRate, salesRate];
+    });
+
+    autoTable(doc, {
+      head: [tableColumn],
+      body: tableRows,
+      startY: y,
+      theme: 'striped',
+      headStyles: { fillColor: [41, 128, 185] },
+    });
+
+    doc.save(`Product_Report_${selectedLocation}_${selectedMonth}_${selectedYear}.pdf`);
+  };
+
+  // Location Comparison Report (Tab 2)
+  const exportLocationExcel = () => {
+    const wb = XLSX.utils.book_new();
+    const wsData = [];
+
+    wsData.push([`Location Comparison - ${selectedMonth} ${selectedYear}`]);
+    wsData.push([]);
+    wsData.push(['Location', 'Total Stock', 'Sold Qty', 'Returned Qty', 'Sales %', 'Revenue']);
+    locationComparisonData.forEach(loc => {
+      wsData.push([loc.location, loc.totalStock, loc.totalSold, loc.totalReturned || 0, loc.salesPercentage, loc.revenue]);
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    XLSX.utils.book_append_sheet(wb, ws, 'Location Comparison');
+    XLSX.writeFile(wb, `Location_Comparison_${selectedMonth}_${selectedYear}.xlsx`);
+  };
+
+  const exportLocationPDF = () => {
+    const doc = new jsPDF();
+    let y = 20;
+    doc.setFontSize(16);
+    doc.text('Location Comparison Report', 14, y);
+    y += 10;
+    doc.setFontSize(12);
+    doc.text(`${selectedMonth} ${selectedYear}`, 14, y);
+    y += 10;
+
+    const tableColumn = ['Location', 'Total Stock', 'Sold Qty', 'Returned Qty', 'Sales %', 'Revenue'];
+    const tableRows = locationComparisonData.map(loc => [
+      loc.location,
+      loc.totalStock,
+      loc.totalSold,
+      loc.totalReturned || 0,
+      loc.salesPercentage,
+      loc.revenue
+    ]);
+
+    autoTable(doc, {
+      head: [tableColumn],
+      body: tableRows,
+      startY: y,
+      theme: 'striped',
+      headStyles: { fillColor: [41, 128, 185] },
+    });
+
+    doc.save(`Location_Comparison_${selectedMonth}_${selectedYear}.pdf`);
+  };
+
+  // Annual Comparison Report (Tab 3)
+  const exportAnnualExcel = () => {
+    const wb = XLSX.utils.book_new();
+    const wsData = [];
+
+    wsData.push([`Annual Comparison - ${selectedLocation} - ${selectedMonth} ${selectedYearFirst} vs ${selectedYearSecond}`]);
+    wsData.push([]);
+    wsData.push(['Summary']);
+    wsData.push([`${selectedYearFirst} Total Sales`, annualComparisonSummary.firstYear.totalSales]);
+    wsData.push([`${selectedYearFirst} Avg Sales`, annualComparisonSummary.firstYear.avgSales.toFixed(1)]);
+    wsData.push([`${selectedYearSecond} Total Sales`, annualComparisonSummary.secondYear.totalSales]);
+    wsData.push([`${selectedYearSecond} Avg Sales`, annualComparisonSummary.secondYear.avgSales.toFixed(1)]);
+    wsData.push(['Growth %', annualComparisonSummary.secondYear.growth.toFixed(1)]);
+    wsData.push(['Total Days', annualComparisonData.length]);
+    wsData.push([]);
+    wsData.push(['Day', `${selectedYearFirst} Sales`, `${selectedYearFirst} Stock`, `${selectedYearFirst} Sales %`, `${selectedYearSecond} Sales`, `${selectedYearSecond} Stock`, `${selectedYearSecond} Sales %`, 'Change %']);
+
+    annualComparisonData.forEach(d => {
+      const firstSales = d[`sold_${selectedYearFirst}`] || 0;
+      const firstStock = d[`stock_${selectedYearFirst}`] || 0;
+      const firstSalesPct = firstStock > 0 ? ((firstSales / firstStock) * 100).toFixed(1) : '0.0';
+      const secondSales = d[`sold_${selectedYearSecond}`] || 0;
+      const secondStock = d[`stock_${selectedYearSecond}`] || 0;
+      const secondSalesPct = secondStock > 0 ? ((secondSales / secondStock) * 100).toFixed(1) : '0.0';
+      const change = firstSales > 0 ? ((secondSales - firstSales) / firstSales * 100).toFixed(1) : (secondSales > 0 ? '100.0' : '0.0');
+      wsData.push([d.day, firstSales, firstStock, firstSalesPct, secondSales, secondStock, secondSalesPct, change]);
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    XLSX.utils.book_append_sheet(wb, ws, 'Annual Comparison');
+    XLSX.writeFile(wb, `Annual_Comparison_${selectedLocation}_${selectedMonth}_${selectedYearFirst}_vs_${selectedYearSecond}.xlsx`);
+  };
+
+  const exportAnnualPDF = () => {
+    const doc = new jsPDF();
+    let y = 20;
+    doc.setFontSize(16);
+    doc.text('Annual Comparison Report', 14, y);
+    y += 10;
+    doc.setFontSize(12);
+    doc.text(`${selectedLocation} - ${selectedMonth} ${selectedYearFirst} vs ${selectedYearSecond}`, 14, y);
+    y += 10;
+
+    doc.setFontSize(14);
+    doc.text('Summary', 14, y);
+    y += 8;
+    doc.setFontSize(10);
+    doc.text(`${selectedYearFirst} Total Sales: ${annualComparisonSummary.firstYear.totalSales}`, 14, y);
+    y += 6;
+    doc.text(`${selectedYearFirst} Avg Sales: ${annualComparisonSummary.firstYear.avgSales.toFixed(1)}`, 14, y);
+    y += 6;
+    doc.text(`${selectedYearSecond} Total Sales: ${annualComparisonSummary.secondYear.totalSales}`, 14, y);
+    y += 6;
+    doc.text(`${selectedYearSecond} Avg Sales: ${annualComparisonSummary.secondYear.avgSales.toFixed(1)}`, 14, y);
+    y += 6;
+    doc.text(`Growth: ${annualComparisonSummary.secondYear.growth.toFixed(1)}%`, 14, y);
+    y += 6;
+    doc.text(`Total Days: ${annualComparisonData.length}`, 14, y);
+    y += 10;
+
+    const tableColumn = ['Day', `${selectedYearFirst} Sales`, `${selectedYearFirst} Stock`, `${selectedYearFirst} Sales %`, `${selectedYearSecond} Sales`, `${selectedYearSecond} Stock`, `${selectedYearSecond} Sales %`, 'Change %'];
+    const tableRows = annualComparisonData.map(d => {
+      const firstSales = d[`sold_${selectedYearFirst}`] || 0;
+      const firstStock = d[`stock_${selectedYearFirst}`] || 0;
+      const firstSalesPct = firstStock > 0 ? ((firstSales / firstStock) * 100).toFixed(1) : '0.0';
+      const secondSales = d[`sold_${selectedYearSecond}`] || 0;
+      const secondStock = d[`stock_${selectedYearSecond}`] || 0;
+      const secondSalesPct = secondStock > 0 ? ((secondSales / secondStock) * 100).toFixed(1) : '0.0';
+      const change = firstSales > 0 ? ((secondSales - firstSales) / firstSales * 100).toFixed(1) : (secondSales > 0 ? '100.0' : '0.0');
+      return [d.day, firstSales, firstStock, firstSalesPct, secondSales, secondStock, secondSalesPct, change];
+    });
+
+    autoTable(doc, {
+      head: [tableColumn],
+      body: tableRows,
+      startY: y,
+      theme: 'striped',
+      headStyles: { fillColor: [41, 128, 185] },
+    });
+
+    doc.save(`Annual_Comparison_${selectedLocation}_${selectedMonth}_${selectedYearFirst}_vs_${selectedYearSecond}.pdf`);
+  };
+
+  // Weather Impact Report (Tab 4)
+  const exportWeatherExcel = () => {
+    const wb = XLSX.utils.book_new();
+
+    // Sheet 1: Low Sales Days
+    const ws1Data = [];
+    ws1Data.push([`Weather Impact Report - ${selectedLocation} - ${selectedMonth} ${selectedYear}`]);
+    ws1Data.push([]);
+    ws1Data.push(['Summary']);
+    ws1Data.push(['Total Market Days', weatherSummary.totalDays]);
+    ws1Data.push(['Low Sales Days', weatherSummary.lowSalesDaysCount]);
+    ws1Data.push(['Average Sales', weatherSummary.avgSales.toFixed(1)]);
+    ws1Data.push(['Average Temperature', weatherSummary.avgTemp.toFixed(1)]);
+    ws1Data.push([]);
+    ws1Data.push(['Low Sales Days Details']);
+    ws1Data.push(['Date', 'Day', 'Sold Qty', 'Total Stock', 'Sales %', 'Weather Condition', 'High Temp', 'Low Temp', 'Description', 'Impact']);
+
+    lowSalesDays.forEach(day => {
+      const salesPercentage = (day.soldQty / weatherSummary.avgSales) * 100;
+      const impact = salesPercentage < 30 ? 'Critical' : 'Low';
+      ws1Data.push([
+        day.date,
+        day.date.split(',')[0],
+        day.soldQty,
+        day.totalStock,
+        day.salesPercentage,
+        day.weatherCondition,
+        day.weatherHighTemp || 'N/A',
+        day.weatherLowTemp || 'N/A',
+        day.weatherDescription,
+        impact
+      ]);
+    });
+
+    const ws1 = XLSX.utils.aoa_to_sheet(ws1Data);
+    XLSX.utils.book_append_sheet(wb, ws1, 'Low Sales Days');
+
+    // Sheet 2: Weather Impact Summary
+    const ws2Data = [];
+    ws2Data.push(['Weather Impact Summary']);
+    ws2Data.push(['Condition', 'Days', 'Avg Sales', 'Low Sales Days', 'Low Sales Rate %']);
+
+    Object.entries(weatherSummary.weatherImpact).forEach(([condition, data]) => {
+      const lowRate = data.count > 0 ? ((data.lowSalesDays / data.count) * 100).toFixed(1) : 0;
+      ws2Data.push([condition, data.count, data.avgSales.toFixed(1), data.lowSalesDays, lowRate]);
+    });
+
+    const ws2 = XLSX.utils.aoa_to_sheet(ws2Data);
+    XLSX.utils.book_append_sheet(wb, ws2, 'Weather Summary');
+
+    XLSX.writeFile(wb, `Weather_Report_${selectedLocation}_${selectedMonth}_${selectedYear}.xlsx`);
+  };
+
+  const exportWeatherPDF = () => {
+    const doc = new jsPDF();
+    let y = 20;
+    doc.setFontSize(16);
+    doc.text('Weather Impact Report', 14, y);
+    y += 10;
+    doc.setFontSize(12);
+    doc.text(`${selectedLocation} - ${selectedMonth} ${selectedYear}`, 14, y);
+    y += 10;
+
+    doc.setFontSize(14);
+    doc.text('Summary', 14, y);
+    y += 8;
+    doc.setFontSize(10);
+    doc.text(`Total Market Days: ${weatherSummary.totalDays}`, 14, y);
+    y += 6;
+    doc.text(`Low Sales Days: ${weatherSummary.lowSalesDaysCount}`, 14, y);
+    y += 6;
+    doc.text(`Average Sales: ${weatherSummary.avgSales.toFixed(1)}`, 14, y);
+    y += 6;
+    doc.text(`Average Temperature: ${weatherSummary.avgTemp.toFixed(1)}°C`, 14, y);
+    y += 10;
+
+    if (lowSalesDays.length > 0) {
+      doc.setFontSize(14);
+      doc.text('Low Sales Days Details', 14, y);
+      y += 8;
+
+      const tableColumn = ['Date', 'Day', 'Sold Qty', 'Total Stock', 'Sales %', 'Weather', 'High Temp', 'Low Temp', 'Impact'];
+      const tableRows = lowSalesDays.map(day => {
+        const salesPercentage = (day.soldQty / weatherSummary.avgSales) * 100;
+        const impact = salesPercentage < 30 ? 'Critical' : 'Low';
+        return [
+          day.date,
+          day.date.split(',')[0],
+          day.soldQty,
+          day.totalStock,
+          day.salesPercentage,
+          day.weatherCondition,
+          day.weatherHighTemp || 'N/A',
+          day.weatherLowTemp || 'N/A',
+          impact
+        ];
+      });
+
+      autoTable(doc, {
+        head: [tableColumn],
+        body: tableRows,
+        startY: y,
+        theme: 'striped',
+        headStyles: { fillColor: [41, 128, 185] },
+        margin: { top: y },
+      });
+
+      y = doc.lastAutoTable.finalY + 10;
+
+      // Weather Impact Summary
+      doc.setFontSize(14);
+      doc.text('Weather Impact Summary', 14, y);
+      y += 8;
+
+      const summaryColumn = ['Condition', 'Days', 'Avg Sales', 'Low Sales Days', 'Low Sales Rate %'];
+      const summaryRows = Object.entries(weatherSummary.weatherImpact).map(([condition, data]) => {
+        const lowRate = data.count > 0 ? ((data.lowSalesDays / data.count) * 100).toFixed(1) : 0;
+        return [condition, data.count, data.avgSales.toFixed(1), data.lowSalesDays, lowRate];
+      });
+
+      autoTable(doc, {
+        head: [summaryColumn],
+        body: summaryRows,
+        startY: y,
+        theme: 'striped',
+        headStyles: { fillColor: [41, 128, 185] },
+      });
+    } else {
+      doc.text('No low sales days found.', 14, y);
+    }
+
+    doc.save(`Weather_Report_${selectedLocation}_${selectedMonth}_${selectedYear}.pdf`);
+  };
+
+  // Daily Report (Tab 5)
+  const exportDailyExcel = () => {
+    const wb = XLSX.utils.book_new();
+    const wsData = [];
+
+    wsData.push([`Daily Report - ${selectedLocation} - ${selectedDate} - Type: ${selectedProductType}`]);
+    wsData.push([]);
+    wsData.push(['Summary']);
+    wsData.push(['Total Categories', dailySummary.totalCategories]);
+    wsData.push(['Total Stock', dailySummary.totalStock]);
+    wsData.push(['Total Returned', dailySummary.totalReturned]);
+    wsData.push([]);
+    wsData.push(['Category', 'Total Stock', 'Returned Qty']);
+
+    dailyChartData.forEach(cat => {
+      wsData.push([cat.category, cat.totalStock, cat.returnQty]);
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    XLSX.utils.book_append_sheet(wb, ws, 'Daily Report');
+    XLSX.writeFile(wb, `Daily_Report_${selectedLocation}_${selectedDate}.xlsx`);
+  };
+
+  const exportDailyPDF = () => {
+    const doc = new jsPDF();
+    let y = 20;
+    doc.setFontSize(16);
+    doc.text('Daily Report', 14, y);
+    y += 10;
+    doc.setFontSize(12);
+    doc.text(`${selectedLocation} - ${new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} - Type: ${selectedProductType}`, 14, y);
+    y += 10;
+
+    doc.setFontSize(14);
+    doc.text('Summary', 14, y);
+    y += 8;
+    doc.setFontSize(10);
+    doc.text(`Total Categories: ${dailySummary.totalCategories}`, 14, y);
+    y += 6;
+    doc.text(`Total Stock: ${dailySummary.totalStock}`, 14, y);
+    y += 6;
+    doc.text(`Total Returned: ${dailySummary.totalReturned}`, 14, y);
+    y += 10;
+
+    const tableColumn = ['Category', 'Total Stock', 'Returned Qty'];
+    const tableRows = dailyChartData.map(cat => [cat.category, cat.totalStock, cat.returnQty]);
+
+    autoTable(doc, {
+      head: [tableColumn],
+      body: tableRows,
+      startY: y,
+      theme: 'striped',
+      headStyles: { fillColor: [41, 128, 185] },
+    });
+
+    doc.save(`Daily_Report_${selectedLocation}_${selectedDate}.pdf`);
+  };
+
+  // Main export handlers
+  const handleExportPDF = () => {
+    if (loading) return;
+    // Check if there is data to export
+    let hasData = true;
+    switch (activeTab) {
+      case 0: hasData = monthlyChartData.length > 0 || monthlySummary.totalProductsQty > 0; break;
+      case 1: hasData = productWiseData.length > 0; break;
+      case 2: hasData = locationComparisonData.length > 0; break;
+      case 3: hasData = annualComparisonData.length > 0; break;
+      case 4: hasData = weatherImpactData.length > 0 || lowSalesDays.length > 0; break;
+      case 5: hasData = dailyChartData.length > 0 || dailySummary.totalCategories > 0; break;
+      default: hasData = false;
+    }
+    if (!hasData) {
+      alert('No data to export. Please generate a report first.');
+      return;
+    }
+
+    switch (activeTab) {
+      case 0: exportMonthlyPDF(); break;
+      case 1: exportProductPDF(); break;
+      case 2: exportLocationPDF(); break;
+      case 3: exportAnnualPDF(); break;
+      case 4: exportWeatherPDF(); break;
+      case 5: exportDailyPDF(); break;
+      default: break;
+    }
+  };
+
+  const handleExportExcel = () => {
+    if (loading) return;
+    let hasData = true;
+    switch (activeTab) {
+      case 0: hasData = monthlyChartData.length > 0 || monthlySummary.totalProductsQty > 0; break;
+      case 1: hasData = productWiseData.length > 0; break;
+      case 2: hasData = locationComparisonData.length > 0; break;
+      case 3: hasData = annualComparisonData.length > 0; break;
+      case 4: hasData = weatherImpactData.length > 0 || lowSalesDays.length > 0; break;
+      case 5: hasData = dailyChartData.length > 0 || dailySummary.totalCategories > 0; break;
+      default: hasData = false;
+    }
+    if (!hasData) {
+      alert('No data to export. Please generate a report first.');
+      return;
+    }
+
+    switch (activeTab) {
+      case 0: exportMonthlyExcel(); break;
+      case 1: exportProductExcel(); break;
+      case 2: exportLocationExcel(); break;
+      case 3: exportAnnualExcel(); break;
+      case 4: exportWeatherExcel(); break;
+      case 5: exportDailyExcel(); break;
+      default: break;
+    }
+  };
+
+  // --- Render functions (unchanged) ---
   const renderMonthlySalesReport = () => (
     <>
       <Grid container spacing={3} sx={{ mb: 3 }}>
@@ -650,12 +1143,10 @@ const Reports = () => {
           </Card>
         </Grid>
       </Grid>
-      
       <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" gutterBottom>
           Sales Trend: {selectedLocation} - {selectedMonth} {selectedYear}
         </Typography>
-        
         {monthlyChartData.length > 0 ? (
           <Box sx={{ width: '100%', height: 400 }}>
             <ResponsiveContainer>
@@ -680,7 +1171,6 @@ const Reports = () => {
     </>
   );
 
-  // Render Product-wise Report (Tab 1)
   const renderProductWiseReport = () => {
     const returnSummary = productWiseData.reduce((acc, item) => ({
       totalReturned: acc.totalReturned + (Number(item.returnQty) || 0),
@@ -688,7 +1178,6 @@ const Reports = () => {
       totalSold: acc.totalSold + (Number(item.soldQty) || 0),
       productCount: acc.productCount + 1
     }), { totalReturned: 0, totalStock: 0, totalSold: 0, productCount: 0 });
-    
     return (
       <>
         <Grid container spacing={3} sx={{ mb: 3 }}>
@@ -735,7 +1224,7 @@ const Reports = () => {
                   Return Rate
                 </Typography>
                 <Typography variant="h4" component="div" color="warning.main">
-                  {returnSummary.totalStock > 0 
+                  {returnSummary.totalStock > 0
                     ? `${((returnSummary.totalReturned / returnSummary.totalStock) * 100).toFixed(1)}%`
                     : '0%'}
                 </Typography>
@@ -743,43 +1232,22 @@ const Reports = () => {
             </Card>
           </Grid>
         </Grid>
-        
         <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
           <Typography variant="h6" gutterBottom>
             Products with Highest Returns: {selectedProductType} - {selectedLocation} - {selectedMonth} {selectedYear}
           </Typography>
-          
           {loading ? (
-            <Box sx={{ 
-              height: 400, 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center' 
-            }}>
+            <Box sx={{ height: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <CircularProgress />
               <Typography sx={{ ml: 2 }}>Loading chart data...</Typography>
             </Box>
           ) : productWiseData.length > 0 ? (
             <>
-              <Box sx={{ 
-                width: '100%', 
-                height: 400,
-                mb: 3,
-                position: 'relative'
-              }}>
-                <ResponsiveContainer width="100%" height="100%" debounce={1}>
-                  <BarChart 
-                    data={productWiseData.slice(0, 10)}
-                    margin={{ top: 20, right: 30, left: 20, bottom: 70 }}
-                  >
+              <Box sx={{ width: '100%', height: 400, mb: 3 }}>
+                <ResponsiveContainer>
+                  <BarChart data={productWiseData.slice(0, 10)} margin={{ top: 20, right: 30, left: 20, bottom: 70 }}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis 
-                      dataKey="productName" 
-                      angle={-45}
-                      textAnchor="end"
-                      height={80}
-                      tick={{ fontSize: 12 }}
-                    />
+                    <XAxis dataKey="productName" angle={-45} textAnchor="end" height={80} tick={{ fontSize: 12 }} />
                     <YAxis />
                     <Tooltip />
                     <Legend />
@@ -789,7 +1257,6 @@ const Reports = () => {
                   </BarChart>
                 </ResponsiveContainer>
               </Box>
-              
               <TableContainer>
                 <Table>
                   <TableHead>
@@ -799,9 +1266,7 @@ const Reports = () => {
                       <TableCell align="right">Total Stock</TableCell>
                       <TableCell align="right">Sold Qty</TableCell>
                       <TableCell align="right" sx={{ backgroundColor: '#ffeeee' }}>
-                        <Typography fontWeight="bold" color="error">
-                          Returned Qty
-                        </Typography>
+                        <Typography fontWeight="bold" color="error">Returned Qty</Typography>
                       </TableCell>
                       <TableCell align="right">Return Rate</TableCell>
                       <TableCell align="right">Sales Rate</TableCell>
@@ -809,52 +1274,19 @@ const Reports = () => {
                   </TableHead>
                   <TableBody>
                     {productWiseData.map((product, index) => {
-                      const returnRate = product.totalStock > 0 
-                        ? ((product.returnQty / product.totalStock) * 100).toFixed(1)
-                        : 0;
-                      const salesRate = product.totalStock > 0 
-                        ? ((product.soldQty / product.totalStock) * 100).toFixed(1)
-                        : 0;
-                      
+                      const returnRate = product.totalStock > 0 ? ((product.returnQty / product.totalStock) * 100).toFixed(1) : 0;
+                      const salesRate = product.totalStock > 0 ? ((product.soldQty / product.totalStock) * 100).toFixed(1) : 0;
                       return (
-                        <TableRow 
-                          key={index}
-                          sx={{ 
-                            '&:hover': { backgroundColor: '#f5f5f5' },
-                            ...(index < 3 ? { backgroundColor: '#fff8e8' } : {})
-                          }}
-                        >
+                        <TableRow key={index} sx={{ '&:hover': { backgroundColor: '#f5f5f5' }, ...(index < 3 ? { backgroundColor: '#fff8e8' } : {}) }}>
                           <TableCell>
-                            <Chip 
-                              label={index + 1} 
-                              size="small"
-                              color={index === 0 ? "error" : index === 1 ? "warning" : index === 2 ? "info" : "default"}
-                              sx={{ fontWeight: 'bold' }}
-                            />
+                            <Chip label={index + 1} size="small" color={index === 0 ? "error" : index === 1 ? "warning" : index === 2 ? "info" : "default"} sx={{ fontWeight: 'bold' }} />
                           </TableCell>
-                          <TableCell>
-                            <Typography fontWeight={index < 3 ? "bold" : "normal"}>
-                              {product.productName}
-                            </Typography>
-                          </TableCell>
+                          <TableCell><Typography fontWeight={index < 3 ? "bold" : "normal"}>{product.productName}</Typography></TableCell>
                           <TableCell align="right">{product.totalStock}</TableCell>
                           <TableCell align="right">{product.soldQty}</TableCell>
-                          <TableCell align="right" sx={{ backgroundColor: '#ffeeee' }}>
-                            <Typography fontWeight="bold" color="error">
-                              {product.returnQty || 0}
-                            </Typography>
-                          </TableCell>
-                          <TableCell align="right">
-                            <Chip 
-                              label={`${returnRate}%`} 
-                              size="small"
-                              color={returnRate > 20 ? "error" : returnRate > 10 ? "warning" : "success"}
-                              variant="outlined"
-                            />
-                          </TableCell>
-                          <TableCell align="right">
-                            {salesRate}%
-                          </TableCell>
+                          <TableCell align="right" sx={{ backgroundColor: '#ffeeee' }}><Typography fontWeight="bold" color="error">{product.returnQty || 0}</Typography></TableCell>
+                          <TableCell align="right"><Chip label={`${returnRate}%`} size="small" color={returnRate > 20 ? "error" : returnRate > 10 ? "warning" : "success"} variant="outlined" /></TableCell>
+                          <TableCell align="right">{salesRate}%</TableCell>
                         </TableRow>
                       );
                     })}
@@ -863,15 +1295,8 @@ const Reports = () => {
               </TableContainer>
             </>
           ) : (
-            <Box sx={{ 
-              height: 400, 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center' 
-            }}>
-              <Typography color="textSecondary">
-                No product data available for the selected filters. Try generating the report.
-              </Typography>
+            <Box sx={{ height: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Typography color="textSecondary">No product data available for the selected filters.</Typography>
             </Box>
           )}
         </Paper>
@@ -879,158 +1304,107 @@ const Reports = () => {
     );
   };
 
-  // Render Location Comparison Report (Tab 2)
   const renderLocationComparisonReport = () => (
-    <>
-      <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          Location Comparison - {selectedMonth} {selectedYear}
-          <Typography variant="body2" color="textSecondary">
-            Selected Locations: {selectedLocations.length}
-          </Typography>
-        </Typography>
-        
-        {locationComparisonData.length > 0 ? (
-          <>
-            <div style={{ width: '100%', height: '400px', marginBottom: '20px' }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={locationComparisonData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis 
-                    dataKey="location" 
-                    angle={-45}
-                    textAnchor="end"
-                    height={80}
-                  />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar name="Total Stock" dataKey="totalStock" fill="#8884d8" />
-                  <Bar name="Sold Qty" dataKey="totalSold" fill="#82ca9d" />
-                  <Bar name="Returned Qty" dataKey="totalReturned" fill="#ff7300" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-            
-            <TableContainer sx={{ mt: 3 }}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Location</TableCell>
-                    <TableCell align="right">Total Stock</TableCell>
-                    <TableCell align="right">Sold Qty</TableCell>
-                    <TableCell align="right">Returned Qty</TableCell>
-                    <TableCell align="right">Sales %</TableCell>
+    <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
+      <Typography variant="h6" gutterBottom>
+        Location Comparison - {selectedMonth} {selectedYear}
+        <Typography variant="body2" color="textSecondary">Selected Locations: {selectedLocations.length}</Typography>
+      </Typography>
+      {locationComparisonData.length > 0 ? (
+        <>
+          <Box sx={{ width: '100%', height: 400, mb: 3 }}>
+            <ResponsiveContainer>
+              <BarChart data={locationComparisonData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="location" angle={-45} textAnchor="end" height={80} />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Bar name="Total Stock" dataKey="totalStock" fill="#8884d8" />
+                <Bar name="Sold Qty" dataKey="totalSold" fill="#82ca9d" />
+                <Bar name="Returned Qty" dataKey="totalReturned" fill="#ff7300" />
+              </BarChart>
+            </ResponsiveContainer>
+          </Box>
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Location</TableCell>
+                  <TableCell align="right">Total Stock</TableCell>
+                  <TableCell align="right">Sold Qty</TableCell>
+                  <TableCell align="right">Returned Qty</TableCell>
+                  <TableCell align="right">Sales %</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {locationComparisonData.map((location, index) => (
+                  <TableRow key={index}>
+                    <TableCell>{location.location}</TableCell>
+                    <TableCell align="right">{location.totalStock}</TableCell>
+                    <TableCell align="right">{location.totalSold}</TableCell>
+                    <TableCell align="right">{location.totalReturned || 0}</TableCell>
+                    <TableCell align="right">{location.salesPercentage ? `${location.salesPercentage}%` : '0%'}</TableCell>
                   </TableRow>
-                </TableHead>
-                <TableBody>
-                  {locationComparisonData.map((location, index) => (
-                    <TableRow key={index}>
-                      <TableCell>{location.location}</TableCell>
-                      <TableCell align="right">{location.totalStock}</TableCell>
-                      <TableCell align="right">{location.totalSold}</TableCell>
-                      <TableCell align="right">{location.totalReturned || 0}</TableCell>
-                      <TableCell align="right">
-                        {location.salesPercentage ? `${location.salesPercentage}%` : '0%'}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </>
-        ) : (
-          <div style={{ 
-            height: '400px', 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center' 
-          }}>
-            <Typography color="textSecondary">
-              No location comparison data available
-            </Typography>
-          </div>
-        )}
-      </Paper>
-    </>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </>
+      ) : (
+        <Box sx={{ height: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Typography color="textSecondary">No location comparison data available</Typography>
+        </Box>
+      )}
+    </Paper>
   );
 
-  // Render Annual Comparison Report (Tab 3)
   const renderAnnualComparisonReport = () => (
     <>
       <Grid container spacing={3} sx={{ mb: 3 }}>
         <Grid item xs={12} md={3}>
           <Card>
             <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                {selectedYearFirst} Total Sales
-              </Typography>
-              <Typography variant="h4" component="div" color="info.main">
-                {annualComparisonSummary.firstYear.totalSales.toLocaleString()}
-              </Typography>
-              <Typography variant="body2" color="textSecondary">
-                Avg: {annualComparisonSummary.firstYear.avgSales.toFixed(1)}/day
-              </Typography>
+              <Typography color="textSecondary" gutterBottom>{selectedYearFirst} Total Sales</Typography>
+              <Typography variant="h4" component="div" color="info.main">{annualComparisonSummary.firstYear.totalSales.toLocaleString()}</Typography>
+              <Typography variant="body2" color="textSecondary">Avg: {annualComparisonSummary.firstYear.avgSales.toFixed(1)}/day</Typography>
             </CardContent>
           </Card>
         </Grid>
         <Grid item xs={12} md={3}>
           <Card>
             <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                {selectedYearSecond} Total Sales
-              </Typography>
-              <Typography variant="h4" component="div" color="success.main">
-                {annualComparisonSummary.secondYear.totalSales.toLocaleString()}
-              </Typography>
-              <Typography variant="body2" color="textSecondary">
-                Avg: {annualComparisonSummary.secondYear.avgSales.toFixed(1)}/day
-              </Typography>
+              <Typography color="textSecondary" gutterBottom>{selectedYearSecond} Total Sales</Typography>
+              <Typography variant="h4" component="div" color="success.main">{annualComparisonSummary.secondYear.totalSales.toLocaleString()}</Typography>
+              <Typography variant="body2" color="textSecondary">Avg: {annualComparisonSummary.secondYear.avgSales.toFixed(1)}/day</Typography>
             </CardContent>
           </Card>
         </Grid>
         <Grid item xs={12} md={3}>
           <Card>
             <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                Growth
+              <Typography color="textSecondary" gutterBottom>Growth</Typography>
+              <Typography variant="h4" component="div" color={annualComparisonSummary.secondYear.growth >= 0 ? "success.main" : "error"}>
+                {annualComparisonSummary.secondYear.growth >= 0 ? '+' : ''}{annualComparisonSummary.secondYear.growth.toFixed(1)}%
               </Typography>
-              <Typography 
-                variant="h4" 
-                component="div" 
-                color={annualComparisonSummary.secondYear.growth >= 0 ? "success.main" : "error"}
-              >
-                {annualComparisonSummary.secondYear.growth >= 0 ? '+' : ''}
-                {annualComparisonSummary.secondYear.growth.toFixed(1)}%
-              </Typography>
-              <Typography variant="body2" color="textSecondary">
-                {selectedYearFirst} → {selectedYearSecond}
-              </Typography>
+              <Typography variant="body2" color="textSecondary">{selectedYearFirst} → {selectedYearSecond}</Typography>
             </CardContent>
           </Card>
         </Grid>
         <Grid item xs={12} md={3}>
           <Card>
             <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                Total Days Compared
-              </Typography>
-              <Typography variant="h4" component="div">
-                {annualComparisonData.length}
-              </Typography>
-              <Typography variant="body2" color="textSecondary">
-                Month: {selectedMonth}
-              </Typography>
+              <Typography color="textSecondary" gutterBottom>Total Days Compared</Typography>
+              <Typography variant="h4" component="div">{annualComparisonData.length}</Typography>
+              <Typography variant="body2" color="textSecondary">Month: {selectedMonth}</Typography>
             </CardContent>
           </Card>
         </Grid>
       </Grid>
-      
       <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" gutterBottom>
           Annual Sales Comparison: {selectedLocation} - {selectedMonth} {selectedYearFirst} vs {selectedYearSecond}
         </Typography>
-        
         {annualComparisonData.length > 0 ? (
           <>
             <Box sx={{ width: '100%', height: 400, mb: 3 }}>
@@ -1041,66 +1415,26 @@ const Reports = () => {
                   <YAxis />
                   <Tooltip />
                   <Legend />
-                  <Area 
-                    type="monotone" 
-                    dataKey={`stock_${selectedYearFirst}`} 
-                    fill="#e0f7fa" 
-                    stroke="#80deea" 
-                    name={`${selectedYearFirst} Stock`}
-                    opacity={0.6}
-                  />
-                  <Area 
-                    type="monotone" 
-                    dataKey={`stock_${selectedYearSecond}`} 
-                    fill="#f3e5f5" 
-                    stroke="#ce93d8" 
-                    name={`${selectedYearSecond} Stock`}
-                    opacity={0.6}
-                  />
-                  <Bar 
-                    dataKey={`sold_${selectedYearFirst}`} 
-                    fill="#0088FE" 
-                    name={`${selectedYearFirst} Sales`}
-                  />
-                  <Bar 
-                    dataKey={`sold_${selectedYearSecond}`} 
-                    fill="#00C49F" 
-                    name={`${selectedYearSecond} Sales`}
-                  />
+                  <Area type="monotone" dataKey={`stock_${selectedYearFirst}`} fill="#e0f7fa" stroke="#80deea" name={`${selectedYearFirst} Stock`} opacity={0.6} />
+                  <Area type="monotone" dataKey={`stock_${selectedYearSecond}`} fill="#f3e5f5" stroke="#ce93d8" name={`${selectedYearSecond} Stock`} opacity={0.6} />
+                  <Bar dataKey={`sold_${selectedYearFirst}`} fill="#0088FE" name={`${selectedYearFirst} Sales`} />
+                  <Bar dataKey={`sold_${selectedYearSecond}`} fill="#00C49F" name={`${selectedYearSecond} Sales`} />
                 </ComposedChart>
               </ResponsiveContainer>
             </Box>
-            
-            <Typography variant="h6" gutterBottom sx={{ mt: 4 }}>
-              Daily Sales Comparison Table
-            </Typography>
-            
+            <Typography variant="h6" gutterBottom sx={{ mt: 4 }}>Daily Sales Comparison Table</Typography>
             <TableContainer>
               <Table>
                 <TableHead>
                   <TableRow>
                     <TableCell>Day</TableCell>
-                    <TableCell align="right" sx={{ backgroundColor: '#e8f4fd' }}>
-                      {selectedYearFirst} Sales
-                    </TableCell>
-                    <TableCell align="right" sx={{ backgroundColor: '#e8f4fd' }}>
-                      {selectedYearFirst} Stock
-                    </TableCell>
-                    <TableCell align="right" sx={{ backgroundColor: '#e8f4fd' }}>
-                      {selectedYearFirst} Sales %
-                    </TableCell>
-                    <TableCell align="right" sx={{ backgroundColor: '#e8f5e8' }}>
-                      {selectedYearSecond} Sales
-                    </TableCell>
-                    <TableCell align="right" sx={{ backgroundColor: '#e8f5e8' }}>
-                      {selectedYearSecond} Stock
-                    </TableCell>
-                    <TableCell align="right" sx={{ backgroundColor: '#e8f5e8' }}>
-                      {selectedYearSecond} Sales %
-                    </TableCell>
-                    <TableCell align="right">
-                      Change
-                    </TableCell>
+                    <TableCell align="right" sx={{ backgroundColor: '#e8f4fd' }}>{selectedYearFirst} Sales</TableCell>
+                    <TableCell align="right" sx={{ backgroundColor: '#e8f4fd' }}>{selectedYearFirst} Stock</TableCell>
+                    <TableCell align="right" sx={{ backgroundColor: '#e8f4fd' }}>{selectedYearFirst} Sales %</TableCell>
+                    <TableCell align="right" sx={{ backgroundColor: '#e8f5e8' }}>{selectedYearSecond} Sales</TableCell>
+                    <TableCell align="right" sx={{ backgroundColor: '#e8f5e8' }}>{selectedYearSecond} Stock</TableCell>
+                    <TableCell align="right" sx={{ backgroundColor: '#e8f5e8' }}>{selectedYearSecond} Sales %</TableCell>
+                    <TableCell align="right">Change</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -1109,52 +1443,19 @@ const Reports = () => {
                     const secondYearSales = dayData[`sold_${selectedYearSecond}`] || 0;
                     const firstYearStock = dayData[`stock_${selectedYearFirst}`] || 0;
                     const secondYearStock = dayData[`stock_${selectedYearSecond}`] || 0;
-                    
-                    const firstYearSalesRate = firstYearStock > 0 
-                      ? ((firstYearSales / firstYearStock) * 100).toFixed(1)
-                      : '0.0';
-                    
-                    const secondYearSalesRate = secondYearStock > 0 
-                      ? ((secondYearSales / secondYearStock) * 100).toFixed(1)
-                      : '0.0';
-                    
-                    const change = firstYearSales > 0 
-                      ? ((secondYearSales - firstYearSales) / firstYearSales * 100).toFixed(1)
-                      : secondYearSales > 0 ? '100.0' : '0.0';
-                    
+                    const firstYearSalesRate = firstYearStock > 0 ? ((firstYearSales / firstYearStock) * 100).toFixed(1) : '0.0';
+                    const secondYearSalesRate = secondYearStock > 0 ? ((secondYearSales / secondYearStock) * 100).toFixed(1) : '0.0';
+                    const change = firstYearSales > 0 ? ((secondYearSales - firstYearSales) / firstYearSales * 100).toFixed(1) : secondYearSales > 0 ? '100.0' : '0.0';
                     return (
                       <TableRow key={index} hover>
-                        <TableCell>
-                          <Typography fontWeight="medium">
-                            {dayData.day}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="right" sx={{ backgroundColor: '#f5faff' }}>
-                          {firstYearSales}
-                        </TableCell>
-                        <TableCell align="right" sx={{ backgroundColor: '#f5faff' }}>
-                          {firstYearStock}
-                        </TableCell>
-                        <TableCell align="right" sx={{ backgroundColor: '#f5faff' }}>
-                          {firstYearSalesRate}%
-                        </TableCell>
-                        <TableCell align="right" sx={{ backgroundColor: '#f5fff5' }}>
-                          {secondYearSales}
-                        </TableCell>
-                        <TableCell align="right" sx={{ backgroundColor: '#f5fff5' }}>
-                          {secondYearStock}
-                        </TableCell>
-                        <TableCell align="right" sx={{ backgroundColor: '#f5fff5' }}>
-                          {secondYearSalesRate}%
-                        </TableCell>
-                        <TableCell align="right">
-                          <Chip 
-                            label={`${parseFloat(change) >= 0 ? '+' : ''}${change}%`}
-                            size="small"
-                            color={parseFloat(change) > 0 ? "success" : parseFloat(change) < 0 ? "error" : "default"}
-                            variant="outlined"
-                          />
-                        </TableCell>
+                        <TableCell><Typography fontWeight="medium">{dayData.day}</Typography></TableCell>
+                        <TableCell align="right" sx={{ backgroundColor: '#f5faff' }}>{firstYearSales}</TableCell>
+                        <TableCell align="right" sx={{ backgroundColor: '#f5faff' }}>{firstYearStock}</TableCell>
+                        <TableCell align="right" sx={{ backgroundColor: '#f5faff' }}>{firstYearSalesRate}%</TableCell>
+                        <TableCell align="right" sx={{ backgroundColor: '#f5fff5' }}>{secondYearSales}</TableCell>
+                        <TableCell align="right" sx={{ backgroundColor: '#f5fff5' }}>{secondYearStock}</TableCell>
+                        <TableCell align="right" sx={{ backgroundColor: '#f5fff5' }}>{secondYearSalesRate}%</TableCell>
+                        <TableCell align="right"><Chip label={`${parseFloat(change) >= 0 ? '+' : ''}${change}%`} size="small" color={parseFloat(change) > 0 ? "success" : parseFloat(change) < 0 ? "error" : "default"} variant="outlined" /></TableCell>
                       </TableRow>
                     );
                   })}
@@ -1164,92 +1465,58 @@ const Reports = () => {
           </>
         ) : (
           <Box sx={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Typography color="textSecondary">
-              No annual comparison data available. Select years and generate report.
-            </Typography>
+            <Typography color="textSecondary">No annual comparison data available. Select years and generate report.</Typography>
           </Box>
         )}
       </Paper>
     </>
   );
 
-  // Render Weather Impact Report (Tab 4)
   const renderWeatherImpactReport = () => (
     <>
-      {/* Summary Cards */}
       <Grid container spacing={3} sx={{ mb: 3 }}>
         <Grid item xs={12} md={3}>
           <Card>
             <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                Total Market Days
-              </Typography>
-              <Typography variant="h4" component="div">
-                {weatherSummary.totalDays}
-              </Typography>
-              <Typography variant="body2" color="textSecondary">
-                {selectedMonth} {selectedYear}
-              </Typography>
+              <Typography color="textSecondary" gutterBottom>Total Market Days</Typography>
+              <Typography variant="h4" component="div">{weatherSummary.totalDays}</Typography>
+              <Typography variant="body2" color="textSecondary">{selectedMonth} {selectedYear}</Typography>
             </CardContent>
           </Card>
         </Grid>
         <Grid item xs={12} md={3}>
           <Card>
             <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                Low Sales Days
-              </Typography>
-              <Typography variant="h4" component="div" color="error">
-                {weatherSummary.lowSalesDaysCount}
-              </Typography>
-              <Typography variant="body2" color="textSecondary">
-                Below {lowSalesThreshold}% of average
-              </Typography>
+              <Typography color="textSecondary" gutterBottom>Low Sales Days</Typography>
+              <Typography variant="h4" component="div" color="error">{weatherSummary.lowSalesDaysCount}</Typography>
+              <Typography variant="body2" color="textSecondary">Below {lowSalesThreshold}% of average</Typography>
             </CardContent>
           </Card>
         </Grid>
         <Grid item xs={12} md={3}>
           <Card>
             <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                Average Sales
-              </Typography>
-              <Typography variant="h4" component="div" color="success.main">
-                {weatherSummary.avgSales.toFixed(1)}
-              </Typography>
-              <Typography variant="body2" color="textSecondary">
-                Per day average
-              </Typography>
+              <Typography color="textSecondary" gutterBottom>Average Sales</Typography>
+              <Typography variant="h4" component="div" color="success.main">{weatherSummary.avgSales.toFixed(1)}</Typography>
+              <Typography variant="body2" color="textSecondary">Per day average</Typography>
             </CardContent>
           </Card>
         </Grid>
         <Grid item xs={12} md={3}>
           <Card>
             <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                Average Temperature
-              </Typography>
-              <Typography variant="h4" component="div" color="info.main">
-                {weatherSummary.avgTemp.toFixed(1)}°C
-              </Typography>
-              <Typography variant="body2" color="textSecondary">
-                High/Low average
-              </Typography>
+              <Typography color="textSecondary" gutterBottom>Average Temperature</Typography>
+              <Typography variant="h4" component="div" color="info.main">{weatherSummary.avgTemp.toFixed(1)}°C</Typography>
+              <Typography variant="body2" color="textSecondary">High/Low average</Typography>
             </CardContent>
           </Card>
         </Grid>
       </Grid>
-      
-      {/* Low Sales Days Analysis */}
       <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          Days with Very Low Sales & Weather Analysis
-        </Typography>
+        <Typography variant="h6" gutterBottom>Days with Very Low Sales & Weather Analysis</Typography>
         <Typography variant="body2" color="textSecondary" paragraph>
-          Showing days where sales were below {lowSalesThreshold}% of the monthly average.
-          Weather data is captured from AddStock entries.
+          Showing days where sales were below {lowSalesThreshold}% of the monthly average. Weather data is captured from AddStock entries.
         </Typography>
-        
         {lowSalesDays.length > 0 ? (
           <>
             <TableContainer>
@@ -1272,150 +1539,40 @@ const Reports = () => {
                   {lowSalesDays.map((day, index) => {
                     const salesPercentage = (day.soldQty / weatherSummary.avgSales) * 100;
                     const isCritical = salesPercentage < 30;
-                    
                     return (
-                      <TableRow 
-                        key={index}
-                        sx={{ 
-                          '&:hover': { backgroundColor: '#f9f9f9' },
-                          ...(isCritical ? { backgroundColor: '#fff0f0' } : {})
-                        }}
-                      >
-                        <TableCell>
-                          <Typography fontWeight="medium">
-                            {day.date}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Chip 
-                            label={day.date.split(',')[0]} 
-                            size="small"
-                            variant="outlined"
-                          />
-                        </TableCell>
-                        <TableCell align="right">
-                          <Typography 
-                            color={isCritical ? "error" : "warning.main"}
-                            fontWeight="bold"
-                          >
-                            {day.soldQty}
-                          </Typography>
-                          <Typography variant="caption" color="textSecondary">
-                            {((day.soldQty / weatherSummary.avgSales) * 100).toFixed(0)}% of avg
-                          </Typography>
-                        </TableCell>
+                      <TableRow key={index} sx={{ '&:hover': { backgroundColor: '#f9f9f9' }, ...(isCritical ? { backgroundColor: '#fff0f0' } : {}) }}>
+                        <TableCell><Typography fontWeight="medium">{day.date}</Typography></TableCell>
+                        <TableCell><Chip label={day.date.split(',')[0]} size="small" variant="outlined" /></TableCell>
+                        <TableCell align="right"><Typography color={isCritical ? "error" : "warning.main"} fontWeight="bold">{day.soldQty}</Typography><Typography variant="caption" color="textSecondary">{((day.soldQty / weatherSummary.avgSales) * 100).toFixed(0)}% of avg</Typography></TableCell>
                         <TableCell align="right">{day.totalStock}</TableCell>
-                        <TableCell align="right">
-                          <Chip 
-                            label={`${day.salesPercentage}%`}
-                            size="small"
-                            color={day.salesPercentage < 50 ? "error" : "warning"}
-                          />
-                        </TableCell>
-                        <TableCell align="center">
-                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
-                            {getWeatherIcon(day.weatherCondition)}
-                            <Typography variant="body2">
-                              {day.weatherCondition}
-                            </Typography>
-                          </Box>
-                        </TableCell>
-                        <TableCell align="right">
-                          {day.weatherHighTemp ? `${day.weatherHighTemp}°C` : 'N/A'}
-                        </TableCell>
-                        <TableCell align="right">
-                          {day.weatherLowTemp ? `${day.weatherLowTemp}°C` : 'N/A'}
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" color="textSecondary">
-                            {day.weatherDescription}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="center">
-                          {isCritical ? (
-                            <Chip 
-                              icon={<ErrorOutlineIcon />}
-                              label="Critical"
-                              size="small"
-                              color="error"
-                              variant="outlined"
-                            />
-                          ) : (
-                            <Chip 
-                              label="Low"
-                              size="small"
-                              color="warning"
-                              variant="outlined"
-                            />
-                          )}
-                        </TableCell>
+                        <TableCell align="right"><Chip label={`${day.salesPercentage}%`} size="small" color={day.salesPercentage < 50 ? "error" : "warning"} /></TableCell>
+                        <TableCell align="center"><Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>{getWeatherIcon(day.weatherCondition)}<Typography variant="body2">{day.weatherCondition}</Typography></Box></TableCell>
+                        <TableCell align="right">{day.weatherHighTemp ? `${day.weatherHighTemp}°C` : 'N/A'}</TableCell>
+                        <TableCell align="right">{day.weatherLowTemp ? `${day.weatherLowTemp}°C` : 'N/A'}</TableCell>
+                        <TableCell><Typography variant="body2" color="textSecondary">{day.weatherDescription}</Typography></TableCell>
+                        <TableCell align="center">{isCritical ? <Chip icon={<ErrorOutlineIcon />} label="Critical" size="small" color="error" variant="outlined" /> : <Chip label="Low" size="small" color="warning" variant="outlined" />}</TableCell>
                       </TableRow>
                     );
                   })}
                 </TableBody>
               </Table>
             </TableContainer>
-            
-            {/* Weather Impact Summary */}
             <Box sx={{ mt: 4 }}>
-              <Typography variant="h6" gutterBottom>
-                Weather Impact Summary
-              </Typography>
+              <Typography variant="h6" gutterBottom>Weather Impact Summary</Typography>
               <Grid container spacing={2}>
                 {Object.entries(weatherSummary.weatherImpact).map(([condition, data]) => (
                   <Grid item xs={12} sm={6} md={4} key={condition}>
                     <Card variant="outlined">
                       <CardContent>
                         <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                          <Box sx={{ 
-                            width: 24, 
-                            height: 24, 
-                            borderRadius: '50%', 
-                            backgroundColor: getWeatherImpactColor(condition),
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            mr: 1
-                          }}>
-                            {getWeatherIcon(condition)}
-                          </Box>
-                          <Typography variant="subtitle1" fontWeight="bold">
-                            {condition}
-                          </Typography>
+                          <Box sx={{ width: 24, height: 24, borderRadius: '50%', backgroundColor: getWeatherImpactColor(condition), display: 'flex', alignItems: 'center', justifyContent: 'center', mr: 1 }}>{getWeatherIcon(condition)}</Box>
+                          <Typography variant="subtitle1" fontWeight="bold">{condition}</Typography>
                         </Box>
                         <Grid container spacing={1}>
-                          <Grid item xs={6}>
-                            <Typography variant="caption" color="textSecondary">
-                              Days
-                            </Typography>
-                            <Typography variant="body2">
-                              {data.count}
-                            </Typography>
-                          </Grid>
-                          <Grid item xs={6}>
-                            <Typography variant="caption" color="textSecondary">
-                              Avg Sales
-                            </Typography>
-                            <Typography variant="body2" color="primary">
-                              {data.avgSales.toFixed(1)}
-                            </Typography>
-                          </Grid>
-                          <Grid item xs={6}>
-                            <Typography variant="caption" color="textSecondary">
-                              Low Sales Days
-                            </Typography>
-                            <Typography variant="body2" color={data.lowSalesDays > 0 ? "error" : "success"}>
-                              {data.lowSalesDays}
-                            </Typography>
-                          </Grid>
-                          <Grid item xs={6}>
-                            <Typography variant="caption" color="textSecondary">
-                              Low Sales Rate
-                            </Typography>
-                            <Typography variant="body2" color={data.lowSalesDays > 0 ? "error" : "success"}>
-                              {data.count > 0 ? ((data.lowSalesDays / data.count) * 100).toFixed(0) : 0}%
-                            </Typography>
-                          </Grid>
+                          <Grid item xs={6}><Typography variant="caption" color="textSecondary">Days</Typography><Typography variant="body2">{data.count}</Typography></Grid>
+                          <Grid item xs={6}><Typography variant="caption" color="textSecondary">Avg Sales</Typography><Typography variant="body2" color="primary">{data.avgSales.toFixed(1)}</Typography></Grid>
+                          <Grid item xs={6}><Typography variant="caption" color="textSecondary">Low Sales Days</Typography><Typography variant="body2" color={data.lowSalesDays > 0 ? "error" : "success"}>{data.lowSalesDays}</Typography></Grid>
+                          <Grid item xs={6}><Typography variant="caption" color="textSecondary">Low Sales Rate</Typography><Typography variant="body2" color={data.lowSalesDays > 0 ? "error" : "success"}>{data.count > 0 ? ((data.lowSalesDays / data.count) * 100).toFixed(0) : 0}%</Typography></Grid>
                         </Grid>
                       </CardContent>
                     </Card>
@@ -1425,110 +1582,51 @@ const Reports = () => {
             </Box>
           </>
         ) : weatherImpactData.length > 0 ? (
-          <Box sx={{ 
-            height: 200, 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center',
-            flexDirection: 'column',
-            gap: 2
-          }}>
-            <Typography variant="h6" color="success.main">
-              Great news! No low sales days found.
-            </Typography>
-            <Typography color="textSecondary">
-              All sales days were above {lowSalesThreshold}% of the monthly average.
-            </Typography>
+          <Box sx={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 2 }}>
+            <Typography variant="h6" color="success.main">Great news! No low sales days found.</Typography>
+            <Typography color="textSecondary">All sales days were above {lowSalesThreshold}% of the monthly average.</Typography>
           </Box>
         ) : (
-          <Box sx={{ 
-            height: 200, 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center' 
-          }}>
-            <Typography color="textSecondary">
-              No weather impact data available. Select location, month, year and generate report.
-            </Typography>
+          <Box sx={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Typography color="textSecondary">No weather impact data available. Select location, month, year and generate report.</Typography>
           </Box>
         )}
       </Paper>
-      
-      {/* Sales vs Weather Chart */}
       {weatherImpactData.length > 0 && (
         <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
-          <Typography variant="h6" gutterBottom>
-            Sales vs Weather Conditions: {selectedLocation} - {selectedMonth} {selectedYear}
-          </Typography>
+          <Typography variant="h6" gutterBottom>Sales vs Weather Conditions: {selectedLocation} - {selectedMonth} {selectedYear}</Typography>
           <Box sx={{ width: '100%', height: 400 }}>
             <ResponsiveContainer>
               <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="date" 
-                  name="Date"
-                  angle={-45}
-                  textAnchor="end"
-                  height={60}
-                  tick={{ fontSize: 12 }}
-                />
-                <YAxis 
-                  dataKey="soldQty" 
-                  name="Sales Quantity" 
-                  label={{ 
-                    value: 'Sales Quantity', 
-                    angle: -90, 
-                    position: 'insideLeft',
-                    offset: -10
-                  }}
-                />
-                <ZAxis 
-                  dataKey="weatherCondition"
-                  name="Weather Condition"
-                  range={[100, 400]}
-                />
-                <Tooltip 
-                  formatter={(value, name, props) => {
-                    if (name === 'soldQty') return [value, 'Sales Quantity'];
-                    if (name === 'weatherCondition') return [value, 'Weather'];
-                    return [value, name];
-                  }}
-                  content={({ active, payload }) => {
-                    if (active && payload && payload.length) {
-                      const data = payload[0].payload;
-                      return (
-                        <Paper sx={{ p: 2 }}>
-                          <Typography variant="subtitle2">{data.date}</Typography>
-                          <Typography variant="body2">Sales: {data.soldQty}</Typography>
-                          <Typography variant="body2">Weather: {data.weatherCondition}</Typography>
-                          <Typography variant="caption">Temp: {data.weatherHighTemp}°C / {data.weatherLowTemp}°C</Typography>
-                        </Paper>
-                      );
-                    }
-                    return null;
-                  }}
-                />
+                <XAxis dataKey="date" name="Date" angle={-45} textAnchor="end" height={60} tick={{ fontSize: 12 }} />
+                <YAxis dataKey="soldQty" name="Sales Quantity" label={{ value: 'Sales Quantity', angle: -90, position: 'insideLeft', offset: -10 }} />
+                <ZAxis dataKey="weatherCondition" name="Weather Condition" range={[100, 400]} />
+                <Tooltip formatter={(value, name, props) => {
+                  if (name === 'soldQty') return [value, 'Sales Quantity'];
+                  if (name === 'weatherCondition') return [value, 'Weather'];
+                  return [value, name];
+                }} content={({ active, payload }) => {
+                  if (active && payload && payload.length) {
+                    const data = payload[0].payload;
+                    return (
+                      <Paper sx={{ p: 2 }}>
+                        <Typography variant="subtitle2">{data.date}</Typography>
+                        <Typography variant="body2">Sales: {data.soldQty}</Typography>
+                        <Typography variant="body2">Weather: {data.weatherCondition}</Typography>
+                        <Typography variant="caption">Temp: {data.weatherHighTemp}°C / {data.weatherLowTemp}°C</Typography>
+                      </Paper>
+                    );
+                  }
+                  return null;
+                }} />
                 <Legend />
-                <ReferenceLine 
-                  y={weatherSummary.avgSales} 
-                  stroke="#8884d8" 
-                  strokeDasharray="3 3"
-                  label={{ 
-                    value: `Avg: ${weatherSummary.avgSales.toFixed(1)}`, 
-                    position: 'right',
-                    fill: '#8884d8'
-                  }}
-                />
-                <Scatter 
-                  name="Sales by Weather" 
-                  data={weatherImpactData} 
-                  fill="#8884d8"
-                  shape={(props) => {
-                    const { cx, cy, payload } = props;
-                    const color = getWeatherImpactColor(payload.weatherCondition);
-                    return <circle cx={cx} cy={cy} r={8} fill={color} stroke="#333" strokeWidth={1} />;
-                  }}
-                />
+                <ReferenceLine y={weatherSummary.avgSales} stroke="#8884d8" strokeDasharray="3 3" label={{ value: `Avg: ${weatherSummary.avgSales.toFixed(1)}`, position: 'right', fill: '#8884d8' }} />
+                <Scatter name="Sales by Weather" data={weatherImpactData} fill="#8884d8" shape={(props) => {
+                  const { cx, cy, payload } = props;
+                  const color = getWeatherImpactColor(payload.weatherCondition);
+                  return <circle cx={cx} cy={cy} r={8} fill={color} stroke="#333" strokeWidth={1} />;
+                }} />
               </ScatterChart>
             </ResponsiveContainer>
           </Box>
@@ -1537,54 +1635,89 @@ const Reports = () => {
     </>
   );
 
+  const renderDailyReport = () => (
+    <>
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        <Grid item xs={12} md={4}>
+          <Card>
+            <CardContent>
+              <Typography color="textSecondary" gutterBottom>Total Categories</Typography>
+              <Typography variant="h4" component="div">{dailySummary.totalCategories}</Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} md={4}>
+          <Card>
+            <CardContent>
+              <Typography color="textSecondary" gutterBottom>Total Stock</Typography>
+              <Typography variant="h4" component="div">{dailySummary.totalStock}</Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} md={4}>
+          <Card>
+            <CardContent>
+              <Typography color="textSecondary" gutterBottom>Total Returned</Typography>
+              <Typography variant="h4" component="div" color="error">{dailySummary.totalReturned}</Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+      <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
+        <Typography variant="h6" gutterBottom>
+          {selectedProductType} Categories – Stock and Returns on{" "}
+          {new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+        </Typography>
+        {dailyChartData.length > 0 ? (
+          <Box sx={{ width: '100%', height: 400 }}>
+            <ResponsiveContainer>
+              <BarChart data={dailyChartData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="category" angle={-45} textAnchor="end" height={80} />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Bar name="Total Stock" dataKey="totalStock" fill="#8884d8" />
+                <Bar name="Returned" dataKey="returnQty" fill="#ff7300" />
+              </BarChart>
+            </ResponsiveContainer>
+          </Box>
+        ) : (
+          <Box sx={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Typography color="textSecondary">No data available for this date</Typography>
+          </Box>
+        )}
+      </Paper>
+    </>
+  );
+
   return (
     <div className="reports-container" style={{ padding: '20px' }}>
       <Typography variant="h4" component="h1" gutterBottom>
         Reports Dashboard
       </Typography>
-      
-      {/* Tabs for different reports */}
       <Paper elevation={1} sx={{ mb: 3 }}>
-        <Tabs 
-          value={activeTab} 
-          onChange={handleTabChange}
-          variant="scrollable"
-          scrollButtons="auto"
-        >
+        <Tabs value={activeTab} onChange={handleTabChange} variant="scrollable" scrollButtons="auto">
           <Tab label="Monthly Sales Report" />
           <Tab label="Product-wise Report" />
           <Tab label="Location Comparison" />
           <Tab label="Annual Comparison Report" />
           <Tab label="Weather Impact Analysis" />
+          <Tab label="Daily Report" />
         </Tabs>
       </Paper>
-      
-      {/* Filter Section */}
       <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          Filters
-        </Typography>
-        
+        <Typography variant="h6" gutterBottom>Filters</Typography>
         <Grid container spacing={3}>
-          {/* Market Location Filter (different for each tab) */}
           {activeTab === 2 ? (
-            // Location Comparison - Multiple Select
             <Grid item xs={12} md={4}>
               <FormControl fullWidth>
                 <InputLabel>Market Locations</InputLabel>
-                <Select
-                  multiple
-                  value={selectedLocations}
-                  onChange={handleLocationMultiSelect}
-                  label="Market Locations"
-                  renderValue={(selected) => (
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                      {selected.map((value) => (
-                        <Chip key={value} label={value} size="small" />
-                      ))}
-                    </Box>
-                  )}
-                >
+                <Select multiple value={selectedLocations} onChange={handleLocationMultiSelect} label="Market Locations" renderValue={(selected) => (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {selected.map((value) => <Chip key={value} label={value} size="small" />)}
+                  </Box>
+                )}>
                   {marketLocations.map((location) => (
                     <MenuItem key={location.name} value={location.name}>
                       <Checkbox checked={selectedLocations.indexOf(location.name) > -1} />
@@ -1595,201 +1728,108 @@ const Reports = () => {
               </FormControl>
             </Grid>
           ) : (
-            // Other tabs - Single Select for location
-            <Grid item xs={12} md={activeTab === 1 ? 3 : activeTab === 3 ? 4 : activeTab === 4 ? 3 : 4}>
+            <Grid item xs={12} md={activeTab === 1 ? 3 : activeTab === 3 ? 4 : activeTab === 4 ? 3 : activeTab === 5 ? 4 : 4}>
               <FormControl fullWidth>
                 <InputLabel>Market Location</InputLabel>
-                <Select
-                  value={selectedLocation}
-                  label="Market Location"
-                  onChange={(e) => setSelectedLocation(e.target.value)}
-                >
-                  {marketLocations.map((location) => (
-                    <MenuItem key={location.name} value={location.name}>
-                      {location.name}
-                    </MenuItem>
-                  ))}
+                <Select value={selectedLocation} label="Market Location" onChange={(e) => setSelectedLocation(e.target.value)}>
+                  {marketLocations.map((location) => <MenuItem key={location.name} value={location.name}>{location.name}</MenuItem>)}
                 </Select>
               </FormControl>
             </Grid>
           )}
-          
-          {/* Product Type Filter - Only for Product-wise Report (Tab 1) */}
-          {activeTab === 1 && (
-            <Grid item xs={12} md={3}>
+          {(activeTab === 1 || activeTab === 5) && (
+            <Grid item xs={12} md={activeTab === 1 ? 3 : 4}>
               <FormControl fullWidth>
                 <InputLabel>Product Type</InputLabel>
-                <Select
-                  value={selectedProductType}
-                  label="Product Type"
-                  onChange={(e) => setSelectedProductType(e.target.value)}
-                >
-                  {productTypes.map((type) => (
-                    <MenuItem key={type} value={type}>
-                      {type}
-                    </MenuItem>
-                  ))}
+                <Select value={selectedProductType} label="Product Type" onChange={(e) => setSelectedProductType(e.target.value)}>
+                  {productTypes.map((type) => <MenuItem key={type} value={type}>{type}</MenuItem>)}
                 </Select>
               </FormControl>
             </Grid>
           )}
-          
-          {/* Month Filter - Not for Annual Comparison */}
-          {activeTab !== 3 && (
+          {activeTab !== 3 && activeTab !== 5 && (
             <Grid item xs={12} md={activeTab === 1 ? 3 : activeTab === 2 ? 4 : activeTab === 4 ? 3 : 4}>
               <FormControl fullWidth>
                 <InputLabel>Month</InputLabel>
-                <Select
-                  value={selectedMonth}
-                  label="Month"
-                  onChange={(e) => setSelectedMonth(e.target.value)}
-                >
-                  {months.map((month) => (
-                    <MenuItem key={month} value={month}>
-                      {month}
-                    </MenuItem>
-                  ))}
+                <Select value={selectedMonth} label="Month" onChange={(e) => setSelectedMonth(e.target.value)}>
+                  {months.map((month) => <MenuItem key={month} value={month}>{month}</MenuItem>)}
                 </Select>
               </FormControl>
             </Grid>
           )}
-          
-          {/* Year Filter - Different for each tab */}
-          {activeTab === 3 ? (
-            // Annual Comparison - Two Year Selectors
+          {activeTab !== 3 && activeTab !== 5 && (
+            <Grid item xs={12} md={activeTab === 1 ? 3 : activeTab === 2 ? 4 : activeTab === 4 ? 3 : 4}>
+              <FormControl fullWidth>
+                <InputLabel>Year</InputLabel>
+                <Select value={selectedYear} label="Year" onChange={(e) => setSelectedYear(e.target.value)}>
+                  {years.map((year) => <MenuItem key={year} value={year.toString()}>{year}</MenuItem>)}
+                </Select>
+              </FormControl>
+            </Grid>
+          )}
+          {activeTab === 3 && (
             <>
               <Grid item xs={12} md={4}>
                 <FormControl fullWidth>
                   <InputLabel>Year First</InputLabel>
-                  <Select
-                    value={selectedYearFirst}
-                    label="Year First"
-                    onChange={(e) => setSelectedYearFirst(e.target.value)}
-                  >
-                    {years.map((year) => (
-                      <MenuItem key={year} value={year.toString()}>
-                        {year}
-                      </MenuItem>
-                    ))}
+                  <Select value={selectedYearFirst} label="Year First" onChange={(e) => setSelectedYearFirst(e.target.value)}>
+                    {years.map((year) => <MenuItem key={year} value={year.toString()}>{year}</MenuItem>)}
                   </Select>
                 </FormControl>
               </Grid>
               <Grid item xs={12} md={4}>
                 <FormControl fullWidth>
                   <InputLabel>Year Second</InputLabel>
-                  <Select
-                    value={selectedYearSecond}
-                    label="Year Second"
-                    onChange={(e) => setSelectedYearSecond(e.target.value)}
-                  >
-                    {years.map((year) => (
-                      <MenuItem key={year} value={year.toString()}>
-                        {year}
-                      </MenuItem>
-                    ))}
+                  <Select value={selectedYearSecond} label="Year Second" onChange={(e) => setSelectedYearSecond(e.target.value)}>
+                    {years.map((year) => <MenuItem key={year} value={year.toString()}>{year}</MenuItem>)}
                   </Select>
                 </FormControl>
               </Grid>
               <Grid item xs={12} md={4}>
                 <FormControl fullWidth>
                   <InputLabel>Month</InputLabel>
-                  <Select
-                    value={selectedMonth}
-                    label="Month"
-                    onChange={(e) => setSelectedMonth(e.target.value)}
-                  >
-                    {months.map((month) => (
-                      <MenuItem key={month} value={month}>
-                        {month}
-                      </MenuItem>
-                    ))}
+                  <Select value={selectedMonth} label="Month" onChange={(e) => setSelectedMonth(e.target.value)}>
+                    {months.map((month) => <MenuItem key={month} value={month}>{month}</MenuItem>)}
                   </Select>
                 </FormControl>
               </Grid>
             </>
-          ) : (
-            // Other tabs - Single Year Selector
-            <Grid item xs={12} md={activeTab === 1 ? 3 : activeTab === 2 ? 4 : activeTab === 4 ? 3 : 4}>
-              <FormControl fullWidth>
-                <InputLabel>Year</InputLabel>
-                <Select
-                  value={selectedYear}
-                  label="Year"
-                  onChange={(e) => setSelectedYear(e.target.value)}
-                >
-                  {years.map((year) => (
-                    <MenuItem key={year} value={year.toString()}>
-                      {year}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+          )}
+          {activeTab === 5 && (
+            <Grid item xs={12} md={4}>
+              <TextField label="Date" type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} InputLabelProps={{ shrink: true }} fullWidth />
             </Grid>
           )}
-          
-          {/* Low Sales Threshold Slider for Weather Impact Report */}
           {activeTab === 4 && (
             <Grid item xs={12} md={3}>
               <Box>
-                <Typography variant="body2" color="textSecondary" gutterBottom>
-                  Low Sales Threshold: {lowSalesThreshold}% of average
-                </Typography>
-                <Slider
-                  value={lowSalesThreshold}
-                  onChange={(e, newValue) => setLowSalesThreshold(newValue)}
-                  valueLabelDisplay="auto"
-                  valueLabelFormat={(value) => `${value}%`}
-                  step={5}
-                  marks={[
-                    { value: 30, label: '30%' },
-                    { value: 50, label: '50%' },
-                    { value: 70, label: '70%' },
-                  ]}
-                  min={20}
-                  max={80}
-                  sx={{ mt: 2 }}
-                />
-                <Typography variant="caption" color="textSecondary">
-                  Days below this % of average sales are considered "low sales"
-                </Typography>
+                <Typography variant="body2" color="textSecondary" gutterBottom>Low Sales Threshold: {lowSalesThreshold}% of average</Typography>
+                <Slider value={lowSalesThreshold} onChange={(e, newValue) => setLowSalesThreshold(newValue)} valueLabelDisplay="auto" valueLabelFormat={(value) => `${value}%`} step={5} marks={[{ value: 30, label: '30%' }, { value: 50, label: '50%' }, { value: 70, label: '70%' }]} min={20} max={80} sx={{ mt: 2 }} />
+                <Typography variant="caption" color="textSecondary">Days below this % of average sales are considered "low sales"</Typography>
               </Box>
             </Grid>
           )}
-          
-          {/* Generate Button */}
-          <Grid item xs={12}>
-            <Button
-              variant="contained"
-              onClick={handleGenerateReport}
-              disabled={loading}
-              startIcon={loading ? <CircularProgress size={20} /> : null}
-              size="large"
-              sx={{ mt: 1 }}
-            >
+          <Grid item xs={12} sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+            <Button variant="contained" onClick={handleGenerateReport} disabled={loading} startIcon={loading ? <CircularProgress size={20} /> : null} size="large">
               {loading ? "Generating..." : "Generate Report"}
+            </Button>
+            <Button variant="outlined" onClick={handleExportPDF} disabled={loading} size="large">
+              Export PDF
+            </Button>
+            <Button variant="outlined" onClick={handleExportExcel} disabled={loading} size="large">
+              Export Excel
             </Button>
           </Grid>
         </Grid>
-        
-        {/* Success/Error Messages */}
-        {success && (
-          <Alert severity="success" sx={{ mt: 2 }}>
-            {success}
-          </Alert>
-        )}
-        {error && (
-          <Alert severity="error" sx={{ mt: 2 }}>
-            {error}
-          </Alert>
-        )}
+        {success && <Alert severity="success" sx={{ mt: 2 }}>{success}</Alert>}
+        {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
       </Paper>
-      
-      {/* Render Active Report */}
       {activeTab === 0 && renderMonthlySalesReport()}
       {activeTab === 1 && renderProductWiseReport()}
       {activeTab === 2 && renderLocationComparisonReport()}
       {activeTab === 3 && renderAnnualComparisonReport()}
       {activeTab === 4 && renderWeatherImpactReport()}
+      {activeTab === 5 && renderDailyReport()}
     </div>
   );
 };
