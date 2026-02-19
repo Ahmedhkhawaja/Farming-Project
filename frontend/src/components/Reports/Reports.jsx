@@ -52,7 +52,29 @@ import ThunderstormIcon from '@mui/icons-material/Thunderstorm';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';   // <-- FIXED: import autoTable as a function
+import autoTable from 'jspdf-autotable';
+
+// Add this helper after the imports and before the component
+const parseDate = (dateInput) => {
+  if (!dateInput) return null;
+  let date;
+  if (typeof dateInput === 'string') {
+    // Try YYYY-MM-DD first (most common)
+    const parts = dateInput.split('-').map(Number);
+    if (parts.length === 3 && parts.every(p => !isNaN(p))) {
+      date = new Date(parts[0], parts[1] - 1, parts[2]);
+    } else {
+      date = new Date(dateInput);
+    }
+  } else if (typeof dateInput === 'number') {
+    date = new Date(dateInput);
+  } else if (dateInput instanceof Date) {
+    date = dateInput;
+  } else {
+    return null;
+  }
+  return isNaN(date.getTime()) ? null : date;
+};
 
 // Market locations
 const marketLocations = [
@@ -136,13 +158,35 @@ const Reports = () => {
   // Daily Report states
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date();
-    return today.toISOString().split('T')[0];
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   });
   const [dailyChartData, setDailyChartData] = useState([]);
   const [dailySummary, setDailySummary] = useState({
     totalCategories: 0,
     totalStock: 0,
     totalReturned: 0
+  });
+
+  // NEW: Daily Report Both states (including notes)
+  const [bothDailyData, setBothDailyData] = useState({
+    Greens: [],
+    Kitchen: []
+  });
+
+  // Add this state near the other bothDaily states (around line 120)
+  const [dailyGeneralNote, setDailyGeneralNote] = useState('');
+
+  const [bothDailySummary, setBothDailySummary] = useState({
+    Greens: { totalCategories: 0, totalStock: 0, totalReturned: 0 },
+    Kitchen: { totalCategories: 0, totalStock: 0, totalReturned: 0 }
+  });
+  // NEW: Notes for each product type
+  const [bothDailyNotes, setBothDailyNotes] = useState({
+    Greens: [],
+    Kitchen: []
   });
 
   // Data states for other reports
@@ -169,6 +213,21 @@ const Reports = () => {
 
   const prevActiveTabRef = useRef(activeTab);
 
+/*   // Helper: safely format a YYYY-MM-DD string
+  const formatDateString = (dateStr, options = { month: 'short', day: 'numeric', year: 'numeric' }) => {
+    if (!dateStr) return '';
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    return date.toLocaleDateString('en-US', options);
+  }; */
+
+  // Replace the existing formatDateString function with this improved version
+const formatDateString = (dateInput, options = { month: 'short', day: 'numeric', year: 'numeric' }) => {
+  const date = parseDate(dateInput);
+  if (!date) return dateInput || ''; // fallback to original input if invalid
+  return date.toLocaleDateString('en-US', options);
+};
+
   // Helper functions
   const getMonthNumber = (monthName) => months.indexOf(monthName) + 1;
 
@@ -193,7 +252,7 @@ const Reports = () => {
     setSelectedLocations(typeof value === 'string' ? value.split(',') : value);
   };
 
-  // --- Original report generation functions (restored) ---
+  // --- Original report generation functions ---
   const generateMonthlyReport = async () => {
     try {
       setLoading(true);
@@ -208,10 +267,7 @@ const Reports = () => {
       });
       if (response.data && response.data.length > 0) {
         const processedData = response.data.map(item => ({
-          date: new Date(item.date).toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric'
-          }),
+          date: formatDateString(item.date, { month: 'short', day: 'numeric' }),
           totalStock: item.totalStock || 0,
           returnQty: item.returnQty || 0,
           soldQty: item.soldQty || 0
@@ -336,11 +392,8 @@ const Reports = () => {
           return [];
         }
         return data.data.map(item => ({
-          date: new Date(item.date).getDate(),
-          day: new Date(item.date).toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric'
-          }),
+          date: parseInt(item.date.split('-')[2]),
+          day: formatDateString(item.date, { month: 'short', day: 'numeric' }),
           [`sold_${year}`]: item.soldQty || 0,
           [`stock_${year}`]: item.totalStock || 0,
           [`return_${year}`]: item.returnQty || 0
@@ -409,13 +462,9 @@ const Reports = () => {
       });
       if (response.data && response.data.length > 0) {
         const processedData = response.data.map(item => ({
-          date: new Date(item.date).toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            weekday: 'short'
-          }),
+          date: formatDateString(item.date, { month: 'short', day: 'numeric', weekday: 'short' }),
           fullDate: item.date,
-          dayOfWeek: new Date(item.date).getDay(),
+          dayOfWeek: new Date(parseInt(item.date.split('-')[0]), parseInt(item.date.split('-')[1]) - 1, parseInt(item.date.split('-')[2])).getDay(),
           soldQty: item.soldQty || 0,
           totalStock: item.totalStock || 0,
           returnQty: item.returnQty || 0,
@@ -485,7 +534,6 @@ const Reports = () => {
     }
   };
 
-  // --- Daily Report generation (already present) ---
   const generateDailyReport = async () => {
     try {
       setLoading(true);
@@ -535,42 +583,122 @@ const Reports = () => {
     }
   };
 
+  // NEW: Generate Daily Report (Both) with notes
+  // Replace the entire generateBothDailyReport function with this:
+const generateBothDailyReport = async () => {
+  try {
+    setLoading(true);
+    setError("");
+
+    // Fetch all stock items for the selected date and location
+    const response = await api.get("/stocks/daily", {
+      params: {
+        date: selectedDate,
+        location: selectedLocation
+      }
+    });
+
+    const allItems = response.data || [];
+
+    // Separate by product type
+    const greensItems = allItems.filter(item => item.productType === 'Greens');
+    const kitchenItems = allItems.filter(item => item.productType === 'Kitchen');
+
+    // Helper to build chart data and summary from items array
+    const buildData = (items) => {
+      if (items.length === 0) {
+        return { chartData: [], summary: { totalCategories: 0, totalStock: 0, totalReturned: 0 } };
+      }
+      const categoryMap = new Map();
+      items.forEach(item => {
+        const category = item.productCategory || "Uncategorized";
+        if (!categoryMap.has(category)) {
+          categoryMap.set(category, { totalStock: 0, returnQty: 0 });
+        }
+        const catData = categoryMap.get(category);
+        catData.totalStock += item.totalStock || 0;
+        catData.returnQty += item.returnQty || 0;
+      });
+      const chartData = Array.from(categoryMap.entries()).map(([category, values]) => ({
+        category,
+        totalStock: values.totalStock,
+        returnQty: values.returnQty
+      })).sort((a, b) => b.totalStock - a.totalStock);
+      const summary = chartData.reduce((acc, cat) => ({
+        totalCategories: acc.totalCategories + 1,
+        totalStock: acc.totalStock + cat.totalStock,
+        totalReturned: acc.totalReturned + cat.returnQty
+      }), { totalCategories: 0, totalStock: 0, totalReturned: 0 });
+      return { chartData, summary };
+    };
+
+    const greens = buildData(greensItems);
+    const kitchen = buildData(kitchenItems);
+
+    setBothDailyData({
+      Greens: greens.chartData,
+      Kitchen: kitchen.chartData
+    });
+    setBothDailySummary({
+      Greens: greens.summary,
+      Kitchen: kitchen.summary
+    });
+
+    // Extract the general note from the first item (all share the same note)
+    let extractedNote = '';
+    if (allItems.length > 0 && allItems[0].notes) {
+      const fullNotes = allItems[0].notes;
+      // Format: "Weather: ... | Notes: ..." or just "Weather: ..."
+      const notesParts = fullNotes.split(' | Notes: ');
+      extractedNote = notesParts.length > 1 ? notesParts[1] : '';
+    }
+    setDailyGeneralNote(extractedNote);
+
+    setSuccess(`Combined daily report generated for ${selectedLocation} on ${selectedDate}`);
+  } catch (err) {
+    console.error("Both daily report error:", err);
+    setError(`Error generating combined daily report: ${err.response?.data?.message || err.message}`);
+  } finally {
+    setLoading(false);
+  }
+};
+
   // Handle generate button
   const handleGenerateReport = () => {
     switch (activeTab) {
       case 0:
-        console.log('Calling generateMonthlyReport');
         generateMonthlyReport();
         break;
       case 1:
-        console.log('Calling generateProductReport');
         generateProductReport();
         break;
       case 2:
-        console.log('Calling generateLocationReport');
         generateLocationReport();
         break;
       case 3:
-        console.log('Calling generateAnnualComparisonReport');
         generateAnnualComparisonReport();
         break;
       case 4:
-        console.log('Calling generateWeatherReport');
         generateWeatherReport();
         break;
       case 5:
-        console.log('Calling generateDailyReport');
         generateDailyReport();
+        break;
+      case 6:
+        generateBothDailyReport();
         break;
       default:
         generateMonthlyReport();
     }
   };
 
-  // Auto‑generate daily report when switching to its tab (once)
+  // Auto‑generate reports when switching to their tab (once)
   useEffect(() => {
     if (activeTab === 5 && prevActiveTabRef.current !== 5) {
       generateDailyReport();
+    }
+    if (activeTab === 6 && prevActiveTabRef.current !== 6) {
+      generateBothDailyReport();
     }
     prevActiveTabRef.current = activeTab;
   }, [activeTab]);
@@ -580,13 +708,14 @@ const Reports = () => {
     generateMonthlyReport();
   }, []);
 
-  // Clear success/error when tab changes (optional but nice)
+  // Clear success/error when tab changes
   useEffect(() => {
     setSuccess("");
     setError("");
   }, [activeTab]);
 
-  // --- EXPORT FUNCTIONS (PDF FIXED) ---
+  // --- EXPORT FUNCTIONS ---
+  // ... (existing exports remain exactly as provided) ...
 
   // Monthly Report (Tab 0)
   const exportMonthlyExcel = () => {
@@ -635,7 +764,6 @@ const Reports = () => {
     const tableColumn = ['Date', 'Total Stock', 'Returned Qty', 'Sold Qty'];
     const tableRows = monthlyChartData.map(item => [item.date, item.totalStock, item.returnQty, item.soldQty]);
 
-    // FIXED: use autoTable(doc, options)
     autoTable(doc, {
       head: [tableColumn],
       body: tableRows,
@@ -1016,7 +1144,7 @@ const Reports = () => {
     doc.text('Daily Report', 14, y);
     y += 10;
     doc.setFontSize(12);
-    doc.text(`${selectedLocation} - ${new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} - Type: ${selectedProductType}`, 14, y);
+    doc.text(`${selectedLocation} - ${formatDateString(selectedDate)} - Type: ${selectedProductType}`, 14, y);
     y += 10;
 
     doc.setFontSize(14);
@@ -1044,10 +1172,102 @@ const Reports = () => {
     doc.save(`Daily_Report_${selectedLocation}_${selectedDate}.pdf`);
   };
 
+  // NEW: Daily Report Both exports
+  const exportBothDailyExcel = () => {
+    const wb = XLSX.utils.book_new();
+    const wsData = [];
+
+    wsData.push([`Combined Daily Report - ${selectedLocation} - ${selectedDate}`]);
+    wsData.push([]);
+    wsData.push(['Greens Summary']);
+    wsData.push(['Total Categories', bothDailySummary.Greens.totalCategories]);
+    wsData.push(['Total Stock', bothDailySummary.Greens.totalStock]);
+    wsData.push(['Total Returned', bothDailySummary.Greens.totalReturned]);
+    wsData.push([]);
+    wsData.push(['Greens Categories', 'Total Stock', 'Returned Qty']);
+    bothDailyData.Greens.forEach(cat => {
+      wsData.push([cat.category, cat.totalStock, cat.returnQty]);
+    });
+    wsData.push([]);
+    wsData.push(['Kitchen Summary']);
+    wsData.push(['Total Categories', bothDailySummary.Kitchen.totalCategories]);
+    wsData.push(['Total Stock', bothDailySummary.Kitchen.totalStock]);
+    wsData.push(['Total Returned', bothDailySummary.Kitchen.totalReturned]);
+    wsData.push([]);
+    wsData.push(['Kitchen Categories', 'Total Stock', 'Returned Qty']);
+    bothDailyData.Kitchen.forEach(cat => {
+      wsData.push([cat.category, cat.totalStock, cat.returnQty]);
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    XLSX.utils.book_append_sheet(wb, ws, 'Combined Daily Report');
+    XLSX.writeFile(wb, `Both_Daily_Report_${selectedLocation}_${selectedDate}.xlsx`);
+  };
+
+  const exportBothDailyPDF = () => {
+    const doc = new jsPDF();
+    let y = 20;
+    doc.setFontSize(16);
+    doc.text('Combined Daily Report', 14, y);
+    y += 10;
+    doc.setFontSize(12);
+    doc.text(`${selectedLocation} - ${formatDateString(selectedDate)}`, 14, y);
+    y += 10;
+
+    // Greens section
+    doc.setFontSize(14);
+    doc.text('Greens', 14, y);
+    y += 8;
+    doc.setFontSize(10);
+    doc.text(`Total Categories: ${bothDailySummary.Greens.totalCategories}`, 14, y);
+    y += 6;
+    doc.text(`Total Stock: ${bothDailySummary.Greens.totalStock}`, 14, y);
+    y += 6;
+    doc.text(`Total Returned: ${bothDailySummary.Greens.totalReturned}`, 14, y);
+    y += 10;
+
+    const greensTableColumn = ['Category', 'Total Stock', 'Returned Qty'];
+    const greensTableRows = bothDailyData.Greens.map(cat => [cat.category, cat.totalStock, cat.returnQty]);
+
+    autoTable(doc, {
+      head: [greensTableColumn],
+      body: greensTableRows,
+      startY: y,
+      theme: 'striped',
+      headStyles: { fillColor: [76, 175, 80] }, // Green
+    });
+
+    y = doc.lastAutoTable.finalY + 10;
+
+    // Kitchen section
+    doc.setFontSize(14);
+    doc.text('Kitchen', 14, y);
+    y += 8;
+    doc.setFontSize(10);
+    doc.text(`Total Categories: ${bothDailySummary.Kitchen.totalCategories}`, 14, y);
+    y += 6;
+    doc.text(`Total Stock: ${bothDailySummary.Kitchen.totalStock}`, 14, y);
+    y += 6;
+    doc.text(`Total Returned: ${bothDailySummary.Kitchen.totalReturned}`, 14, y);
+    y += 10;
+
+    const kitchenTableColumn = ['Category', 'Total Stock', 'Returned Qty'];
+    const kitchenTableRows = bothDailyData.Kitchen.map(cat => [cat.category, cat.totalStock, cat.returnQty]);
+
+    autoTable(doc, {
+      head: [kitchenTableColumn],
+      body: kitchenTableRows,
+      startY: y,
+      theme: 'striped',
+      headStyles: { fillColor: [255, 152, 0] }, // Orange
+    });
+
+    doc.save(`Both_Daily_Report_${selectedLocation}_${selectedDate}.pdf`);
+  };
+
   // Main export handlers
   const handleExportPDF = () => {
     if (loading) return;
-    // Check if there is data to export
     let hasData = true;
     switch (activeTab) {
       case 0: hasData = monthlyChartData.length > 0 || monthlySummary.totalProductsQty > 0; break;
@@ -1056,6 +1276,7 @@ const Reports = () => {
       case 3: hasData = annualComparisonData.length > 0; break;
       case 4: hasData = weatherImpactData.length > 0 || lowSalesDays.length > 0; break;
       case 5: hasData = dailyChartData.length > 0 || dailySummary.totalCategories > 0; break;
+      case 6: hasData = bothDailyData.Greens.length > 0 || bothDailyData.Kitchen.length > 0; break;
       default: hasData = false;
     }
     if (!hasData) {
@@ -1070,6 +1291,7 @@ const Reports = () => {
       case 3: exportAnnualPDF(); break;
       case 4: exportWeatherPDF(); break;
       case 5: exportDailyPDF(); break;
+      case 6: exportBothDailyPDF(); break;
       default: break;
     }
   };
@@ -1084,6 +1306,7 @@ const Reports = () => {
       case 3: hasData = annualComparisonData.length > 0; break;
       case 4: hasData = weatherImpactData.length > 0 || lowSalesDays.length > 0; break;
       case 5: hasData = dailyChartData.length > 0 || dailySummary.totalCategories > 0; break;
+      case 6: hasData = bothDailyData.Greens.length > 0 || bothDailyData.Kitchen.length > 0; break;
       default: hasData = false;
     }
     if (!hasData) {
@@ -1098,11 +1321,12 @@ const Reports = () => {
       case 3: exportAnnualExcel(); break;
       case 4: exportWeatherExcel(); break;
       case 5: exportDailyExcel(); break;
+      case 6: exportBothDailyExcel(); break;
       default: break;
     }
   };
 
-  // --- Render functions (unchanged) ---
+  // --- Render functions ---
   const renderMonthlySalesReport = () => (
     <>
       <Grid container spacing={3} sx={{ mb: 3 }}>
@@ -1665,8 +1889,7 @@ const Reports = () => {
       </Grid>
       <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" gutterBottom>
-          {selectedProductType} Categories – Stock and Returns on{" "}
-          {new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+          {selectedProductType} Categories – Stock and Returns on {formatDateString(selectedDate)}
         </Typography>
         {dailyChartData.length > 0 ? (
           <Box sx={{ width: '100%', height: 400 }}>
@@ -1691,6 +1914,93 @@ const Reports = () => {
     </>
   );
 
+  // NEW: Render Both Daily Report with notes
+  const renderBothDailyReport = () => (
+    <>
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        <Grid item xs={12} md={6}>
+          <Card sx={{ backgroundColor: '#e8f5e8' }}>
+            <CardContent>
+              <Typography variant="h6" color="success.main" gutterBottom>Greens Summary</Typography>
+              <Typography>Total Categories: {bothDailySummary.Greens.totalCategories}</Typography>
+              <Typography>Total Stock: {bothDailySummary.Greens.totalStock}</Typography>
+              <Typography color="error">Total Returned: {bothDailySummary.Greens.totalReturned}</Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} md={6}>
+          <Card sx={{ backgroundColor: '#fff3e0' }}>
+            <CardContent>
+              <Typography variant="h6" color="warning.main" gutterBottom>Kitchen Summary</Typography>
+              <Typography>Total Categories: {bothDailySummary.Kitchen.totalCategories}</Typography>
+              <Typography>Total Stock: {bothDailySummary.Kitchen.totalStock}</Typography>
+              <Typography color="error">Total Returned: {bothDailySummary.Kitchen.totalReturned}</Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
+        <Typography variant="h6" gutterBottom>Greens Categories – Stock and Returns on {formatDateString(selectedDate)}</Typography>
+        {bothDailyData.Greens.length > 0 ? (
+          <Box sx={{ width: '100%', height: 300 }}>
+            <ResponsiveContainer>
+              <BarChart data={bothDailyData.Greens}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="category" angle={-45} textAnchor="end" height={80} />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Bar name="Total Stock" dataKey="totalStock" fill="#4caf50" />
+                <Bar name="Returned" dataKey="returnQty" fill="#ff7300" />
+              </BarChart>
+            </ResponsiveContainer>
+          </Box>
+        ) : (
+          <Box sx={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Typography color="textSecondary">No Greens data available for this date</Typography>
+          </Box>
+        )}
+      </Paper>
+
+      <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
+        <Typography variant="h6" gutterBottom>Kitchen Categories – Stock and Returns on {formatDateString(selectedDate)}</Typography>
+        {bothDailyData.Kitchen.length > 0 ? (
+          <Box sx={{ width: '100%', height: 300 }}>
+            <ResponsiveContainer>
+              <BarChart data={bothDailyData.Kitchen}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="category" angle={-45} textAnchor="end" height={80} />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Bar name="Total Stock" dataKey="totalStock" fill="#ff9800" />
+                <Bar name="Returned" dataKey="returnQty" fill="#ff7300" />
+              </BarChart>
+            </ResponsiveContainer>
+          </Box>
+        ) : (
+          <Box sx={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Typography color="textSecondary">No Kitchen data available for this date</Typography>
+          </Box>
+        )}
+      </Paper>
+
+      {/* NEW: Notes section */}
+
+<Paper elevation={1} sx={{ p: 3, mb: 3 }}>
+  <Typography variant="h6" gutterBottom>Notes from Stock Additions</Typography>
+  {dailyGeneralNote ? (
+    <Typography variant="body1" sx={{ fontStyle: 'italic', backgroundColor: '#f5f5f5', p: 2, borderRadius: 1 }}>
+      {dailyGeneralNote}
+    </Typography>
+  ) : (
+    <Typography color="textSecondary">No notes added for this day.</Typography>
+  )}
+</Paper>
+    </>
+  );
+
   return (
     <div className="reports-container" style={{ padding: '20px' }}>
       <Typography variant="h4" component="h1" gutterBottom>
@@ -1704,6 +2014,7 @@ const Reports = () => {
           <Tab label="Annual Comparison Report" />
           <Tab label="Weather Impact Analysis" />
           <Tab label="Daily Report" />
+          <Tab label="Daily Report (Both)" />
         </Tabs>
       </Paper>
       <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
@@ -1728,7 +2039,7 @@ const Reports = () => {
               </FormControl>
             </Grid>
           ) : (
-            <Grid item xs={12} md={activeTab === 1 ? 3 : activeTab === 3 ? 4 : activeTab === 4 ? 3 : activeTab === 5 ? 4 : 4}>
+            <Grid item xs={12} md={activeTab === 1 ? 3 : activeTab === 3 ? 4 : activeTab === 4 ? 3 : activeTab === 5 ? 4 : activeTab === 6 ? 4 : 4}>
               <FormControl fullWidth>
                 <InputLabel>Market Location</InputLabel>
                 <Select value={selectedLocation} label="Market Location" onChange={(e) => setSelectedLocation(e.target.value)}>
@@ -1747,7 +2058,7 @@ const Reports = () => {
               </FormControl>
             </Grid>
           )}
-          {activeTab !== 3 && activeTab !== 5 && (
+          {activeTab !== 3 && activeTab !== 5 && activeTab !== 6 && (
             <Grid item xs={12} md={activeTab === 1 ? 3 : activeTab === 2 ? 4 : activeTab === 4 ? 3 : 4}>
               <FormControl fullWidth>
                 <InputLabel>Month</InputLabel>
@@ -1757,7 +2068,7 @@ const Reports = () => {
               </FormControl>
             </Grid>
           )}
-          {activeTab !== 3 && activeTab !== 5 && (
+          {activeTab !== 3 && activeTab !== 5 && activeTab !== 6 && (
             <Grid item xs={12} md={activeTab === 1 ? 3 : activeTab === 2 ? 4 : activeTab === 4 ? 3 : 4}>
               <FormControl fullWidth>
                 <InputLabel>Year</InputLabel>
@@ -1795,7 +2106,7 @@ const Reports = () => {
               </Grid>
             </>
           )}
-          {activeTab === 5 && (
+          {(activeTab === 5 || activeTab === 6) && (
             <Grid item xs={12} md={4}>
               <TextField label="Date" type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} InputLabelProps={{ shrink: true }} fullWidth />
             </Grid>
@@ -1830,6 +2141,7 @@ const Reports = () => {
       {activeTab === 3 && renderAnnualComparisonReport()}
       {activeTab === 4 && renderWeatherImpactReport()}
       {activeTab === 5 && renderDailyReport()}
+      {activeTab === 6 && renderBothDailyReport()}
     </div>
   );
 };
