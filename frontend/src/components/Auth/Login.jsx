@@ -97,7 +97,7 @@ const Login = () => {
                     align="center"
                     sx={{ mb: 3, color: '#555' }}
                 >
-                    Welcome back to your farm Syed Moeen Ahmad!
+                    Welcome back to the farm Syed Moeen Ahmad!
                 </Typography>
 
                 {error && (
