@@ -29,7 +29,7 @@ const Navbar = () => {
           component="div" 
           sx={{ flexGrow: 1, fontWeight: 'bold' }}
         >
-          🌾 Farm Fresh Dashboard
+          🌾 Farm Fresh
         </Typography>
 
         {user && (
