@@ -19,33 +19,59 @@ const Navbar = () => {
   };
 
   return (
-    <AppBar position="static">
+    <AppBar 
+      position="static" 
+      sx={{ backgroundColor: '#2e7d32' }} // Deep farm green
+    >
       <Toolbar>
-        <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-          Grocery Sales Dashboard
+        <Typography 
+          variant="h6" 
+          component="div" 
+          sx={{ flexGrow: 1, fontWeight: 'bold' }}
+        >
+          🌾 Farm Fresh Dashboard
         </Typography>
 
         {user && (
           <Box>
-            <Button color="inherit" component={Link} to="/dashboard">
+            <Button 
+              sx={{ color: '#fff', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }} 
+              component={Link} 
+              to="/dashboard"
+            >
               Dashboard
             </Button>
 
             {user.role === "manager" && (
-              <Button color="inherit" component={Link} to="/products">
+              <Button 
+                sx={{ color: '#fff', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }} 
+                component={Link} 
+                to="/products"
+              >
                 Products
               </Button>
             )}
 
-            <Button color="inherit" component={Link} to="/add-stocks">
+            <Button 
+              sx={{ color: '#fff', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }} 
+              component={Link} 
+              to="/add-stocks"
+            >
               Add Stocks
             </Button>
 
-            <Button color="inherit" component={Link} to="/reports">
+            <Button 
+              sx={{ color: '#fff', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }} 
+              component={Link} 
+              to="/reports"
+            >
               Reports
             </Button>
 
-            <Button color="inherit" onClick={handleLogout}>
+            <Button 
+              sx={{ color: '#fff', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }} 
+              onClick={handleLogout}
+            >
               Logout ({user.username})
             </Button>
           </Box>

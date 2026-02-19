@@ -46,18 +46,66 @@ const Login = () => {
     };
 
     return (
-        <Container maxWidth="sm" sx={{ mt: 8 }}>
-            <Paper elevation={3} sx={{ p: 4 }}>
-                <Typography variant="h4" align="center" gutterBottom>
-                    Login
+    <Box
+        sx={{
+            minHeight: '100vh',
+            backgroundImage: `url('https://images.unsplash.com/photo-1500937386664-56d1dfef3854')`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            position: 'relative'
+        }}
+    >
+        {/* Green Overlay */}
+        <Box
+            sx={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                backgroundColor: 'rgba(34, 139, 34, 0.45)'
+            }}
+        />
+
+        <Container maxWidth="sm" sx={{ position: 'relative', zIndex: 1 }}>
+            <Paper
+                elevation={10}
+                sx={{
+                    p: 5,
+                    borderRadius: 4,
+                    backdropFilter: 'blur(10px)',
+                    backgroundColor: 'rgba(255,255,255,0.9)'
+                }}
+            >
+                <Typography
+                    variant="h4"
+                    align="center"
+                    gutterBottom
+                    sx={{
+                        fontWeight: 'bold',
+                        color: '#2e7d32'
+                    }}
+                >
+                    🌾 Farm Fresh Login
                 </Typography>
-                
+
+                <Typography
+                    variant="body2"
+                    align="center"
+                    sx={{ mb: 3, color: '#555' }}
+                >
+                    Welcome back to your farm marketplace
+                </Typography>
+
                 {error && (
                     <Alert severity="error" sx={{ mb: 2 }}>
                         {error}
                     </Alert>
                 )}
-                
+
                 <form onSubmit={handleSubmit}>
                     <TextField
                         fullWidth
@@ -68,7 +116,7 @@ const Login = () => {
                         margin="normal"
                         required
                     />
-                    
+
                     <TextField
                         fullWidth
                         label="Password"
@@ -79,21 +127,29 @@ const Login = () => {
                         margin="normal"
                         required
                     />
-                    
+
                     <Button
                         fullWidth
                         type="submit"
                         variant="contained"
-                        color="primary"
-                        sx={{ mt: 3, mb: 2 }}
+                        sx={{
+                            mt: 3,
+                            mb: 2,
+                            backgroundColor: '#2e7d32',
+                            '&:hover': {
+                                backgroundColor: '#1b5e20'
+                            }
+                        }}
                         disabled={loading}
                     >
-                        {loading ? 'Logging in...' : 'Login'}
+                        {loading ? 'Logging in...' : 'Enter the Farm'}
                     </Button>
                 </form>
             </Paper>
         </Container>
-    );
+    </Box>
+);
+
 };
 
 export default Login;

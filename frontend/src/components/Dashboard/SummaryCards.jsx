@@ -38,7 +38,7 @@ const SummaryCards = ({ summary }) => {
             icon: <Inventory />
         },
         {
-            title: 'This Month',
+            title: 'This Month 123',
             totalStock: summary.month?.totalStock || 0,
             stockSold: summary.month?.stockSold || 0,
             stockReturned: summary.month?.stockReturned || 0,
