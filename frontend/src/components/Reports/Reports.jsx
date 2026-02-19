@@ -1989,13 +1989,13 @@ const generateBothDailyReport = async () => {
       {/* NEW: Notes section */}
 
 <Paper elevation={1} sx={{ p: 3, mb: 3 }}>
-  <Typography variant="h6" gutterBottom>Notes from Stock Additions</Typography>
+  <Typography variant="h6" gutterBottom>Notes added while Adding Stocks</Typography>
   {dailyGeneralNote ? (
     <Typography variant="body1" sx={{ fontStyle: 'italic', backgroundColor: '#f5f5f5', p: 2, borderRadius: 1 }}>
       {dailyGeneralNote}
     </Typography>
   ) : (
-    <Typography color="textSecondary">No notes added for this day.</Typography>
+    <Typography color="textSecondary">No notes added for this day!</Typography>
   )}
 </Paper>
     </>
