@@ -2003,7 +2003,7 @@ const generateBothDailyReport = async () => {
 
   return (
     <div className="reports-container" style={{ padding: '20px' }}>
-      <Typography variant="h4" component="h1" gutterBottom>
+      <Typography variant="h4" gutterBottom sx={{ mb: 4, color: '#2c3e50', fontWeight: 600 }}>
         Reports Dashboard
       </Typography>
       <Paper elevation={1} sx={{ mb: 3 }}>

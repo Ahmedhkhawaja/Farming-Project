@@ -1,4 +1,4 @@
-// AddStock.jsx - Updated with requested changes + Notes field near Save button
+// AddStock.jsx - Updated with UI changes fixed
 import React, { useState, useEffect } from 'react';
 import {
   TextField,
@@ -62,10 +62,9 @@ const AddStock = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [tabValue, setTabValue] = useState(0); // for top tabs (Product Listing / Add New)
-  const [filterTab, setFilterTab] = useState('crates'); // new filter tabs: crates (Greens) / individuals (Kitchen)
+  const [tabValue, setTabValue] = useState(0);
+  const [filterTab, setFilterTab] = useState('crates');
 
-  // New Product Dialog State
   const [newProductDialog, setNewProductDialog] = useState(false);
   const [newProductData, setNewProductData] = useState({
     productType: '',
@@ -73,12 +72,10 @@ const AddStock = () => {
     unit: 'pieces'
   });
 
-  // Weather state
   const [weather, setWeather] = useState(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [weatherError, setWeatherError] = useState('');
 
-  // Form state
   const [formData, setFormData] = useState({
     productType: '',
     productCategory: '',
@@ -86,11 +83,9 @@ const AddStock = () => {
     unit: 'pieces'
   });
 
-  // Product options from API
   const [productTypes, setProductTypes] = useState([]);
   const [productCategories, setProductCategories] = useState({});
 
-  // Units for selection (values remain original, labels are transformed)
   const units = [
     { value: 'pieces', label: 'Item(s)' },
     { value: 'Cases', label: 'Crate(s)' },
@@ -102,14 +97,12 @@ const AddStock = () => {
     { value: 'bottle', label: 'Bottle' }
   ];
 
-  // Default units based on product type
   const getDefaultUnitForType = (type) => {
-    if (type === 'Greens') return 'Cases'; // stored as Cases, displayed as Crate(s)
-    if (type === 'Kitchen') return 'pieces'; // stored as pieces, displayed as Item(s)
+    if (type === 'Greens') return 'Cases';
+    if (type === 'Kitchen') return 'pieces';
     return 'pieces';
   };
 
-  // Market locations with coordinates
   const marketLocations = [
     { name: 'Union Square (Monday) Manhattan', lat: 40.7359, lon: -73.9911 },
     { name: 'Union Square (Wednesday) Manhattan', lat: 40.7359, lon: -73.9911 },
@@ -121,7 +114,6 @@ const AddStock = () => {
     { name: 'Jackson Heights (Sunday) Queens', lat: 40.7557, lon: -73.8846 }
   ];
 
-  // Default product template
   const defaultProductsTemplate = [
     { productType: 'Greens', productCategory: 'Lettuce', unit: 'Cases' },
     { productType: 'Greens', productCategory: 'Baby Green', unit: 'Cases' },
@@ -144,30 +136,25 @@ const AddStock = () => {
 
   const WEATHER_API_KEY = process.env.REACT_APP_WEATHER_API_KEY || '11429cda8c44fbbbcfcbcddf66aeba13';
 
-  // New state for optional notes (e.g., low sales reason)
   const [salesNotes, setSalesNotes] = useState('');
 
-  // Load saved stocks when date or location changes
   useEffect(() => {
     if (selectedDate && marketLocation) {
-      setSalesNotes(''); // Clear notes when switching date/location
+      setSalesNotes('');
       fetchSavedStocks();
     }
   }, [selectedDate, marketLocation]);
 
-  // Fetch weather when date or location changes
   useEffect(() => {
     if (marketLocation && selectedDate) {
       fetchWeatherForecast();
     }
   }, [marketLocation, selectedDate]);
 
-  // Fetch all product data on mount
   useEffect(() => {
     fetchProductTypes();
   }, []);
 
-  // Fetch product types
   const fetchProductTypes = async () => {
     try {
       const response = await api.get('/product-types');
@@ -215,17 +202,16 @@ const AddStock = () => {
   };
 
   const fetchWeatherForecast = async () => {
-  try {
-    setWeatherLoading(true);
-    setWeatherError('');
-    
-    // Trim the location before matching
-    const trimmedLocation = marketLocation.trim();
-    const selectedLocation = marketLocations.find(loc => loc.name === trimmedLocation);
-    if (!selectedLocation) {
-      setWeatherError('Location coordinates not found');
-      return;
-    }
+    try {
+      setWeatherLoading(true);
+      setWeatherError('');
+      
+      const trimmedLocation = marketLocation.trim();
+      const selectedLocation = marketLocations.find(loc => loc.name === trimmedLocation);
+      if (!selectedLocation) {
+        setWeatherError('Location coordinates not found');
+        return;
+      }
 
       const { lat, lon } = selectedLocation;
       const url = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${WEATHER_API_KEY}&units=metric`;
@@ -250,7 +236,6 @@ const AddStock = () => {
       };
 
       const selectedDateStr = formatDateStr(selectedDay);
-      const todayDateStr = formatDateStr(today);
 
       const dailyForecasts = data.list.filter(item => {
         const forecastDate = new Date(item.dt * 1000);
@@ -374,7 +359,7 @@ const AddStock = () => {
   const getWeatherImpact = (weather) => {
     if (!weather) return '';
 
-    const { main, rain, snow, temperature, highTemp, lowTemp } = weather;
+    const { main, lowTemp, highTemp, temperature } = weather;
 
     if (main.toLowerCase().includes('rain') || main.toLowerCase().includes('snow')) {
       return '⛈️ Expected Low Sales: Rainy/Snowy days typically see 40-60% lower sales';
@@ -536,7 +521,6 @@ const AddStock = () => {
         weatherDescription = weather.description || weather.main;
       }
 
-      // Build notes string: weather info + optional user notes
       let notesWithWeather = `Weather: ${weatherCondition} (H:${weatherHighTemp}°C/L:${weatherLowTemp}°C)`;
       if (salesNotes.trim()) {
         notesWithWeather += ` | Notes: ${salesNotes.trim()}`;
@@ -573,12 +557,12 @@ const AddStock = () => {
           remainingQty: returnQty,
           unit: item.unit?.trim() || "pieces",
           location: marketLocation.trim() || "Unknown",
-          notes: notesWithWeather,  // Updated to include user notes
+          notes: notesWithWeather,
           weatherCondition: weatherCondition,
           weatherHighTemp: weatherHighTemp,
           weatherLowTemp: weatherLowTemp,
           weatherDescription: weatherDescription,
-          weatherTemperature: weatherHighTemp, // optional: explicitly set
+          weatherTemperature: weatherHighTemp,
         };
 
         console.log(`Stock item ${index + 1}:`, stockItem);
@@ -617,17 +601,16 @@ const AddStock = () => {
     }
   };
 
- const fetchSavedStocks = async () => {
-  try {
-    setLoading(true);
-    const formattedDate = formatDateForAPI(selectedDate);
-    // Trim the location to match stored data
-    const res = await api.get("/stocks/daily", {
-      params: {
-        date: formattedDate,
-        location: marketLocation
-      }
-    });
+  const fetchSavedStocks = async () => {
+    try {
+      setLoading(true);
+      const formattedDate = formatDateForAPI(selectedDate);
+      const res = await api.get("/stocks/daily", {
+        params: {
+          date: formattedDate,
+          location: marketLocation
+        }
+      });
 
       if (res.data && res.data.length > 0) {
         const mapped = res.data.map((item) => ({
@@ -643,21 +626,18 @@ const AddStock = () => {
 
         setStockItems(mapped);
 
-         // Extract user notes from the first item's notes field
-      if (res.data[0] && res.data[0].notes) {
-        const fullNotes = res.data[0].notes;
-        // Notes format: "Weather: ... | Notes: ..." or just "Weather: ..."
-        const notesParts = fullNotes.split(' | Notes: ');
-        if (notesParts.length > 1) {
-          setSalesNotes(notesParts[1]); // user notes part
+        if (res.data[0] && res.data[0].notes) {
+          const fullNotes = res.data[0].notes;
+          const notesParts = fullNotes.split(' | Notes: ');
+          if (notesParts.length > 1) {
+            setSalesNotes(notesParts[1]);
+          } else {
+            setSalesNotes('');
+          }
         } else {
-          setSalesNotes(''); // No user notes saved
+          setSalesNotes('');
         }
-      } else {
-        setSalesNotes('');
-      }
 
-        
       } else {
         const defaultItems = defaultProductsTemplate.map((product, index) => ({
           id: `default-${index}-${Date.now()}`,
@@ -676,7 +656,6 @@ const AddStock = () => {
     } catch (err) {
       console.error("Error fetching saved stocks:", err);
       setError(`Failed to load saved data: ${err.response?.data?.message || err.message}`);
-      // Fallback to default items
       const defaultItems = defaultProductsTemplate.map((product, index) => ({
         id: `default-${index}-${Date.now()}`,
         productType: product.productType,
@@ -729,431 +708,520 @@ const AddStock = () => {
     });
   };
 
-  // Filter items based on selected tab
   const filteredItems = stockItems.filter(item => {
     if (filterTab === 'crates') return item.productType === 'Greens';
     if (filterTab === 'individuals') return item.productType === 'Kitchen';
-    return true; // fallback
+    return true;
   });
 
-  // Returned items list for summary
   const returnedItems = stockItems.filter(item => (item.returnQty || 0) > 0);
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
-      <div className="add-stock-container">
-        {success && (
-          <Alert severity="success" sx={{ mb: 2 }}>
-            {success}
-          </Alert>
-        )}
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
+      <Box
+        sx={{
+          minHeight: '100vh',
+          backgroundImage: `url('https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&w=2000&q=80')`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundAttachment: 'fixed',
+          position: 'relative',
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(255, 255, 255, 0.85)',
+            zIndex: 1
+          }
+        }}
+      >
+        <Box sx={{ position: 'relative', zIndex: 2, p: 3 }}>
+          <div className="add-stock-container">
+            {success && (
+              <Alert severity="success" sx={{ mb: 2 }}>
+                {success}
+              </Alert>
+            )}
+            {error && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {error}
+              </Alert>
+            )}
 
-        <Typography variant="h4" component="h1" gutterBottom className="page-title">
-          Stock Management
-        </Typography>
-
-        <Box sx={{ mb: 2 }}>
-          <Button
-            variant="outlined"
-            startIcon={<AddCircleIcon />}
-            onClick={() => setNewProductDialog(true)}
-          >
-            Add Missing Product To Listing
-          </Button>
-        </Box>
-
-        <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-          <Tabs value={tabValue} onChange={handleTabChange}>
-            <Tab label="Product Listing" sx={{ textTransform: 'none', fontWeight: 600 }} />
-          </Tabs>
-        </Box>
-
-        <Paper className="market-details-section" elevation={1} sx={{ mb: 3 }}>
-          <Typography variant="h6" gutterBottom className="section-title">
-            Market Details
-          </Typography>
-
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={6}>
-              <div className="market-details-grid">
-                <div className="market-detail-item">
-                  <Typography variant="subtitle2" className="detail-label">
-                    Date
-                  </Typography>
-                  <DatePicker
-                    value={selectedDate}
-                    onChange={(newDate) => setSelectedDate(newDate)}
-                    renderInput={(params) => <TextField {...params} fullWidth size="small" />}
-                  />
-                </div>
-
-                <div className="market-detail-item">
-                  <Typography variant="subtitle2" className="detail-label">
-                    Market Location
-                  </Typography>
-                  <FormControl fullWidth size="small">
-                    <Select
-                      value={marketLocation}
-                      onChange={(e) => handleMarketLocationChange(e.target.value)}
-                    >
-                      {marketLocations.map((location) => (
-                        <MenuItem key={location.name} value={location.name}>
-                          {location.name}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </div>
-              </div>
-            </Grid>
-
-            <Grid item xs={12} md={6}>
-              <Card variant="outlined" sx={{ height: '100%' }}>
-                <CardContent>
-                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-                    <Typography variant="subtitle1" fontWeight="bold">
-                      🌤️ Weather Forecast
-                    </Typography>
-                    {weatherLoading && <CircularProgress size={20} />}
-                  </Box>
-
-                  {weatherError ? (
-                    <Alert severity="warning" sx={{ mt: 1 }}>
-                      {weatherError}
-                    </Alert>
-                  ) : weather ? (
-                    <>
-                      <Box display="flex" alignItems="center" gap={2} mb={1}>
-                        {weather.icon && (
-                          <img
-                            src={weather.icon}
-                            alt={weather.description}
-                            style={{ width: 50, height: 50 }}
-                          />
-                        )}
-                        <Box>
-                          {/* Convert temperatures to Fahrenheit */}
-                          <Typography variant="h6" component="span">
-                            {celsiusToFahrenheit(weather.temperature)}°F
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            Feels like {celsiusToFahrenheit(weather.feelsLike)}°F
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary" display="block">
-                            H: {celsiusToFahrenheit(weather.highTemp)}°F • L: {celsiusToFahrenheit(weather.lowTemp)}°F
-                          </Typography>
-                        </Box>
-                        <Box flexGrow={1} textAlign="right">
-                          <Typography variant="body1" fontWeight="medium" sx={{ textTransform: 'capitalize' }}>
-                            {weather.description}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {marketLocation}
-                          </Typography>
-                          {!weather.isForecast && (
-                            <Typography variant="caption" color="warning" display="block">
-                              Current weather (no forecast available)
-                            </Typography>
-                          )}
-                        </Box>
-                      </Box>
-
-                      <Box display="flex" gap={2} mb={2}>
-                        <Chip
-                          size="small"
-                          label={`💧 ${weather.humidity}%`}
-                          variant="outlined"
-                        />
-                        <Chip
-                          size="small"
-                          label={`💨 ${weather.windSpeed} m/s`}
-                          variant="outlined"
-                        />
-                        {weather.rain > 0 && (
-                          <Chip
-                            size="small"
-                            label={`🌧️ ${weather.rain}mm`}
-                            variant="outlined"
-                            color="primary"
-                          />
-                        )}
-                        {weather.snow > 0 && (
-                          <Chip
-                            size="small"
-                            label={`❄️ ${weather.snow}mm`}
-                            variant="outlined"
-                            color="primary"
-                          />
-                        )}
-                        <Chip
-                          size="small"
-                          label={`📊 ${weather.pressure} hPa`}
-                          variant="outlined"
-                        />
-                      </Box>
-
-                      <Alert
-                        severity={
-                          weather.main.toLowerCase().includes('rain') ||
-                          weather.main.toLowerCase().includes('snow') ? 'warning' : 'info'
-                        }
-                        icon={false}
-                        sx={{
-                          backgroundColor: weather.main.toLowerCase().includes('rain') ?
-                            'rgba(255, 193, 7, 0.1)' : 'rgba(33, 150, 243, 0.1)',
-                          fontSize: '0.875rem'
-                        }}
-                      >
-                        {getWeatherImpact(weather)}
-                      </Alert>
-                    </>
-                  ) : (
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                      Loading weather forecast...
-                    </Typography>
-                  )}
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
-        </Paper>
-
-        {tabValue === 0 ? (
-          <Box>
-            <Typography variant="h6" gutterBottom className="section-title">
-              Product Listing - {marketLocation} ({formatDate(selectedDate)})
+            <Typography variant="h4" gutterBottom sx={{ mb: 4, color: '#2c3e50', fontWeight: 600 }}>
+              Stock Management
             </Typography>
 
-            {/* New filter tabs for Crates (Greens) and Individuals (Kitchen) */}
-            <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-              <Tabs value={filterTab} onChange={handleFilterTabChange}>
-                <Tab label="Crates" value="crates" sx={{ textTransform: 'none' }} />
-                <Tab label="Individuals" value="individuals" sx={{ textTransform: 'none' }} />
+            <Box sx={{ mb: 2 }}>
+              <Button
+                variant="outlined"
+                startIcon={<AddCircleIcon />}
+                onClick={() => setNewProductDialog(true)}
+              >
+                Add Missing Product To Listing
+              </Button>
+            </Box>
+
+            <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+              <Tabs 
+                value={tabValue} 
+                onChange={handleTabChange}
+                textColor="success"
+                indicatorColor="success"
+              >
+                <Tab label="Product Listing" sx={{ textTransform: 'none', fontWeight: 600 }} />
               </Tabs>
             </Box>
 
-            {stockItems.length === 0 ? (
-              <Paper sx={{ p: 4, textAlign: 'center' }}>
-                <Typography variant="body1" color="text.secondary">
-                  Loading products...
-                </Typography>
-              </Paper>
-            ) : (
-              <>
-                <Paper className="stock-items-section" elevation={1}>
-                  <TableContainer>
-                    <Table className="stock-table">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Product Type</TableCell>
-                          <TableCell>Product Category</TableCell>
-                          <TableCell>Total Stock</TableCell>
-                          <TableCell>Unit</TableCell>
-                          <TableCell>Returned Items</TableCell>
-                          <TableCell>Actions</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {filteredItems.map((item, index) => {
-                          // Find original index for delete operation
-                          const originalIndex = stockItems.findIndex(si => si.id === item.id);
-                          return (
-                            <TableRow key={item.id || index}>
-                              <TableCell>{item.productType}</TableCell>
-                              <TableCell>
-                                {item.productCategory || 'No Category'}
-                              </TableCell>
-                              <TableCell>
-                                <TextField
-                                  size="small"
-                                  type="number"
-                                  value={item.totalStock}
-                                  onChange={(e) => handleQuantityChange(originalIndex, 'totalStock', e.target.value)}
-                                  onFocus={(e) => e.target.select()} // Auto-select on focus
-                                  InputProps={{
-                                    inputProps: { min: 0, step: 0.5 }
-                                  }}
-                                  sx={{ width: 120 }}
-                                />
-                              </TableCell>
-                              <TableCell>{getUnitLabel(item.unit)}</TableCell>
-                              <TableCell>
-                                <TextField
-                                  size="small"
-                                  type="number"
-                                  value={item.returnQty}
-                                  onChange={(e) => handleQuantityChange(originalIndex, 'returnQty', e.target.value)}
-                                  onFocus={(e) => e.target.select()} // Auto-select on focus
-                                  InputProps={{
-                                    inputProps: { min: 0, step: 0.5, max: item.totalStock }
-                                  }}
-                                  sx={{ width: 120 }}
-                                />
-                              </TableCell>
-                              <TableCell>
-                                <div className="action-buttons">
-                                  <IconButton
-                                    size="small"
-                                    onClick={() => handleDeleteItem(originalIndex)}
-                                    className="delete-button"
-                                    title="Delete item"
-                                  >
-                                    <DeleteIcon fontSize="small" />
-                                  </IconButton>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                </Paper>
-
-                {/* Summary Section - now only shows returned items */}
-                <Paper className="summary-section" elevation={1} sx={{ mt: 3, p: 3 }}>
-                  <Typography variant="h6" gutterBottom>
-                    Returned Items Summary
-                  </Typography>
-                  {returnedItems.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">
-                      No returned items entered.
-                    </Typography>
-                  ) : (
-                    <Box component="ul" sx={{ pl: 2, mb: 2 }}>
-                      {returnedItems.map((item, idx) => (
-                        <Typography key={idx} component="li" variant="body1">
-                          {item.productCategory} {item.returnQty} {getUnitLabel(item.unit)} returned
-                        </Typography>
-                      ))}
-                    </Box>
-                  )}
-
-                  {/* New Notes TextArea near Save Button */}
-                  <TextField
-                    label="Notes (optional) - e.g., reason for low sales"
-                    multiline
-                    rows={2}
-                    fullWidth
-                    value={salesNotes}
-                    onChange={(e) => setSalesNotes(e.target.value)}
-                    sx={{ mb: 2 }}
-                  />
-
-                  {/* Save Button */}
-                  <Box sx={{ mt: 1, display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
-                    <Button
-                      variant="contained"
-                      color="primary"
-                      startIcon={loading ? <CircularProgress size={20} /> : <SaveIcon />}
-                      onClick={handleSave}
-                      disabled={loading}
-                      size="large"
-                    >
-                      Save/Update
-                    </Button>
-                  </Box>
-                </Paper>
-              </>
-            )}
-          </Box>
-        ) : (
-          // Add New Product Form (not used, but kept for reference)
-          <Paper className="stock-item-form" elevation={1} sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom className="section-title">
-              Add New Product
-            </Typography>
-            {/* ... (unchanged) ... */}
-          </Paper>
-        )}
-
-        {/* Add Missing Product Dialog */}
-        <Dialog open={newProductDialog} onClose={() => setNewProductDialog(false)} maxWidth="sm" fullWidth>
-          <DialogTitle>Add Missing Product to Listing</DialogTitle>
-          <DialogContent>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Add a product that is missing from the current stock listing.
-            </Typography>
-
-            <Grid container spacing={2} sx={{ mt: 1 }}>
-              <Grid item xs={12}>
-                <FormControl fullWidth>
-                  <InputLabel>Product Type *</InputLabel>
-                  <Select
-                    value={newProductData.productType}
-                    onChange={handleNewProductChange('productType')}
-                    label="Product Type *"
-                  >
-                    <MenuItem value="">Select Type</MenuItem>
-                    {productTypes.map((type) => (
-                      <MenuItem key={type} value={type}>
-                        {type}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-
-              <Grid item xs={12}>
-                <FormControl fullWidth>
-                  <InputLabel>Product Category *</InputLabel>
-                  <Select
-                    value={newProductData.productCategory}
-                    onChange={handleNewProductChange('productCategory')}
-                    label="Product Category *"
-                    disabled={!newProductData.productType}
-                  >
-                    <MenuItem value="">Select Category</MenuItem>
-                    {newProductData.productType &&
-                     productCategories[newProductData.productType]?.map((category) => (
-                      <MenuItem key={category} value={category}>
-                        {category}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-
-              <Grid item xs={12}>
-                <FormControl fullWidth>
-                  <InputLabel>Unit *</InputLabel>
-                  <Select
-                    value={newProductData.unit}
-                    onChange={handleNewProductChange('unit')}
-                    label="Unit *"
-                  >
-                    {units.map((unit) => (
-                      <MenuItem key={unit.value} value={unit.value}>
-                        {unit.label}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-            </Grid>
-
-            <Alert severity="info" sx={{ mt: 2 }}>
-              This product will be added to your current listing with Total Stock = 0 and Returned Items = 0.
-              You can then adjust the Total Stock in the listing table.
-            </Alert>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setNewProductDialog(false)}>Cancel</Button>
-            <Button
-              variant="contained"
-              onClick={handleAddNewProduct}
-              disabled={!newProductData.productType || !newProductData.productCategory}
+            <Paper
+              className="market-details-section"
+              elevation={0}
+              sx={{
+                mb: 3,
+                p: 3,
+                borderRadius: 3,
+                backgroundColor: 'rgba(46,125,50,0.06)',
+                border: '1px solid rgba(46,125,50,0.15)',
+                backdropFilter: 'blur(5px)'
+              }}
             >
-              Add Product to Listing
-            </Button>
-          </DialogActions>
-        </Dialog>
-      </div>
+              <Typography variant="h6" gutterBottom className="section-title">
+                Market Details
+              </Typography>
+
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <div className="market-details-grid">
+                    <div className="market-detail-item">
+                      <Typography variant="subtitle2" className="detail-label">
+                        Date
+                      </Typography>
+                      <DatePicker
+                        value={selectedDate}
+                        onChange={(newDate) => setSelectedDate(newDate)}
+                        renderInput={(params) => <TextField {...params} fullWidth size="small" />}
+                      />
+                    </div>
+
+                    <div className="market-detail-item">
+                      <Typography variant="subtitle2" className="detail-label">
+                        Market Location
+                      </Typography>
+                      <FormControl fullWidth size="small">
+                        <Select
+                          value={marketLocation}
+                          onChange={(e) => handleMarketLocationChange(e.target.value)}
+                        >
+                          {marketLocations.map((location) => (
+                            <MenuItem key={location.name} value={location.name}>
+                              {location.name}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </div>
+                  </div>
+                </Grid>
+
+                <Grid item xs={12} md={6}>
+                  <Card
+                    variant="outlined"
+                    sx={{
+                      height: '100%',
+                      borderRadius: 3,
+                      backgroundColor: 'rgba(255,255,255,0.95)',
+                      border: '1px solid rgba(46,125,50,0.2)',
+                      backdropFilter: 'blur(5px)'
+                    }}
+                  >
+                    <CardContent>
+                      <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                        <Typography variant="subtitle1" fontWeight="bold">
+                          🌤️ Weather Forecast
+                        </Typography>
+                        {weatherLoading && <CircularProgress size={20} />}
+                      </Box>
+
+                      {weatherError ? (
+                        <Alert severity="warning" sx={{ mt: 1 }}>
+                          {weatherError}
+                        </Alert>
+                      ) : weather ? (
+                        <>
+                          <Box display="flex" alignItems="center" gap={2} mb={1}>
+                            {weather.icon && (
+                              <img
+                                src={weather.icon}
+                                alt={weather.description}
+                                style={{ width: 50, height: 50 }}
+                              />
+                            )}
+                            <Box>
+                              <Typography variant="h6" component="span">
+                                {celsiusToFahrenheit(weather.temperature)}°F
+                              </Typography>
+                              <Typography variant="body2" color="text.secondary">
+                                Feels like {celsiusToFahrenheit(weather.feelsLike)}°F
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary" display="block">
+                                H: {celsiusToFahrenheit(weather.highTemp)}°F • L: {celsiusToFahrenheit(weather.lowTemp)}°F
+                              </Typography>
+                            </Box>
+                            <Box flexGrow={1} textAlign="right">
+                              <Typography variant="body1" fontWeight="medium" sx={{ textTransform: 'capitalize' }}>
+                                {weather.description}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {marketLocation}
+                              </Typography>
+                              {!weather.isForecast && (
+                                <Typography variant="caption" color="warning" display="block">
+                                  Current weather (no forecast available)
+                                </Typography>
+                              )}
+                            </Box>
+                          </Box>
+
+                          <Box display="flex" gap={2} mb={2} flexWrap="wrap">
+                            <Chip
+                              size="small"
+                              label={`💧 ${weather.humidity}%`}
+                              variant="outlined"
+                            />
+                            <Chip
+                              size="small"
+                              label={`💨 ${weather.windSpeed} m/s`}
+                              variant="outlined"
+                            />
+                            {weather.rain > 0 && (
+                              <Chip
+                                size="small"
+                                label={`🌧️ ${weather.rain}mm`}
+                                variant="outlined"
+                                color="primary"
+                              />
+                            )}
+                            {weather.snow > 0 && (
+                              <Chip
+                                size="small"
+                                label={`❄️ ${weather.snow}mm`}
+                                variant="outlined"
+                                color="primary"
+                              />
+                            )}
+                            <Chip
+                              size="small"
+                              label={`📊 ${weather.pressure} hPa`}
+                              variant="outlined"
+                            />
+                          </Box>
+
+                          <Alert
+                            severity={
+                              weather.main.toLowerCase().includes('rain') ||
+                              weather.main.toLowerCase().includes('snow')
+                                ? 'warning'
+                                : 'success'
+                            }
+                            icon={false}
+                            sx={{
+                              backgroundColor: weather.main.toLowerCase().includes('rain') ?
+                                'rgba(255, 193, 7, 0.1)' : 'rgba(46,125,50,0.1)',
+                              fontSize: '0.875rem'
+                            }}
+                          >
+                            {getWeatherImpact(weather)}
+                          </Alert>
+                        </>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                          Loading weather forecast...
+                        </Typography>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Grid>
+              </Grid>
+            </Paper>
+
+            {tabValue === 0 ? (
+              <Box>
+                <Typography variant="h6" gutterBottom className="section-title">
+                  Product Listing - {marketLocation} ({formatDate(selectedDate)})
+                </Typography>
+
+                <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+                  <Tabs 
+                    value={filterTab} 
+                    onChange={handleFilterTabChange}
+                    textColor="success"
+                    indicatorColor="success"
+                  >
+                    <Tab label="Crates" value="crates" sx={{ textTransform: 'none' }} />
+                    <Tab label="Individuals" value="individuals" sx={{ textTransform: 'none' }} />
+                  </Tabs>
+                </Box>
+
+                {stockItems.length === 0 ? (
+                  <Paper sx={{ p: 4, textAlign: 'center' }}>
+                    <Typography variant="body1" color="text.secondary">
+                      Loading products...
+                    </Typography>
+                  </Paper>
+                ) : (
+                  <>
+                    <Paper className="stock-items-section" elevation={1}>
+                      <TableContainer>
+                        <Table className="stock-table">
+                          <TableHead>
+                            <TableRow sx={{
+                              background: 'linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%)'
+                            }}>
+                              <TableCell sx={{ color: '#fff', fontWeight: 'bold' }}>Product Type</TableCell>
+                              <TableCell sx={{ color: '#fff', fontWeight: 'bold' }}>Product Category</TableCell>
+                              <TableCell sx={{ color: '#fff', fontWeight: 'bold' }}>Total Stock</TableCell>
+                              <TableCell sx={{ color: '#fff', fontWeight: 'bold' }}>Unit</TableCell>
+                              <TableCell sx={{ color: '#fff', fontWeight: 'bold' }}>Returned Items</TableCell>
+                              <TableCell sx={{ color: '#fff', fontWeight: 'bold' }}>Actions</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {filteredItems.map((item, index) => {
+                              const originalIndex = stockItems.findIndex(si => si.id === item.id);
+                              return (
+                                <TableRow key={item.id || index}>
+                                  <TableCell>{item.productType}</TableCell>
+                                  <TableCell>
+                                    {item.productCategory || 'No Category'}
+                                  </TableCell>
+                                  <TableCell>
+                                    <TextField
+                                      size="small"
+                                      type="number"
+                                      value={item.totalStock}
+                                      onChange={(e) => handleQuantityChange(originalIndex, 'totalStock', e.target.value)}
+                                      onFocus={(e) => e.target.select()}
+                                      InputProps={{
+                                        inputProps: { min: 0, step: 0.5 }
+                                      }}
+                                      sx={{ width: 120 }}
+                                    />
+                                  </TableCell>
+                                  <TableCell>{getUnitLabel(item.unit)}</TableCell>
+                                  <TableCell>
+                                    <TextField
+                                      size="small"
+                                      type="number"
+                                      value={item.returnQty}
+                                      onChange={(e) => handleQuantityChange(originalIndex, 'returnQty', e.target.value)}
+                                      onFocus={(e) => e.target.select()}
+                                      InputProps={{
+                                        inputProps: { min: 0, step: 0.5, max: item.totalStock }
+                                      }}
+                                      sx={{ width: 120 }}
+                                    />
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="action-buttons">
+                                      <IconButton
+                                        size="small"
+                                        onClick={() => handleDeleteItem(originalIndex)}
+                                        className="delete-button"
+                                        title="Delete item"
+                                      >
+                                        <DeleteIcon fontSize="small" />
+                                      </IconButton>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    </Paper>
+
+                    <Paper
+                      className="summary-section"
+                      elevation={0}
+                      sx={{
+                        mt: 3,
+                        p: 3,
+                        borderRadius: 3,
+                        backgroundColor: 'rgba(46,125,50,0.05)',
+                        border: '1px solid rgba(46,125,50,0.15)',
+                        backdropFilter: 'blur(5px)'
+                      }}
+                    >
+                      <Typography variant="h6" gutterBottom>
+                        Returned Items Summary
+                      </Typography>
+                      {returnedItems.length === 0 ? (
+                        <Typography variant="body2" color="text.secondary">
+                          No returned items entered.
+                        </Typography>
+                      ) : (
+                        <Box component="ul" sx={{ pl: 2, mb: 2 }}>
+                          {returnedItems.map((item, idx) => (
+                            <Typography key={idx} component="li" variant="body1">
+                              {item.productCategory} {item.returnQty} {getUnitLabel(item.unit)} returned
+                            </Typography>
+                          ))}
+                        </Box>
+                      )}
+
+                      <TextField
+                        label="Notes (optional) - e.g., reason for low sales"
+                        multiline
+                        rows={2}
+                        fullWidth
+                        value={salesNotes}
+                        onChange={(e) => setSalesNotes(e.target.value)}
+                        sx={{ mb: 2 }}
+                      />
+
+                      <Box sx={{ mt: 1, display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
+                        <Button
+                          variant="contained"
+                          sx={{
+                            background: 'linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%)',
+                            '&:hover': {
+                              background: 'linear-gradient(135deg, #1b5e20 0%, #0d3b12 100%)'
+                            }
+                          }}
+                          startIcon={loading ? <CircularProgress size={20} /> : <SaveIcon />}
+                          onClick={handleSave}
+                          disabled={loading}
+                          size="large"
+                        >
+                          Save/Update
+                        </Button>
+                      </Box>
+                    </Paper>
+                  </>
+                )}
+              </Box>
+            ) : null}
+
+           <Dialog open={newProductDialog} onClose={() => setNewProductDialog(false)} maxWidth="sm" fullWidth>
+  <DialogTitle>Add Missing Product to Listing</DialogTitle>
+  <DialogContent>
+    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+      Add a product that is missing from the current stock listing.
+    </Typography>
+
+    <Box sx={{ mt: 2 }}>
+      {/* Product Type */}
+      <FormControl fullWidth size="medium" sx={{ mb: 2 }}>
+        <InputLabel id="product-type-label">Product Type *</InputLabel>
+        <Select
+          labelId="product-type-label"
+          id="product-type-select"
+          value={newProductData.productType}
+          onChange={handleNewProductChange('productType')}
+          label="Product Type *"
+          MenuProps={{
+            PaperProps: {
+              style: {
+                maxHeight: 300
+              }
+            }
+          }}
+        >
+          <MenuItem value="">Select Type</MenuItem>
+          {productTypes.map((type) => (
+            <MenuItem key={type} value={type}>
+              {type}
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+
+      {/* Product Category */}
+      <FormControl fullWidth size="medium" sx={{ mb: 2 }}>
+        <InputLabel id="product-category-label">Product Category *</InputLabel>
+        <Select
+          labelId="product-category-label"
+          id="product-category-select"
+          value={newProductData.productCategory}
+          onChange={handleNewProductChange('productCategory')}
+          label="Product Category *"
+          disabled={!newProductData.productType}
+          MenuProps={{
+            PaperProps: {
+              style: {
+                maxHeight: 300
+              }
+            }
+          }}
+        >
+          <MenuItem value="">Select Category</MenuItem>
+          {newProductData.productType &&
+           productCategories[newProductData.productType]?.map((category) => (
+            <MenuItem key={category} value={category}>
+              {category}
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+
+      {/* Unit */}
+      <FormControl fullWidth size="medium" sx={{ mb: 2 }}>
+        <InputLabel id="unit-label">Unit *</InputLabel>
+        <Select
+          labelId="unit-label"
+          id="unit-select"
+          value={newProductData.unit}
+          onChange={handleNewProductChange('unit')}
+          label="Unit *"
+          MenuProps={{
+            PaperProps: {
+              style: {
+                maxHeight: 300
+              }
+            }
+          }}
+        >
+          {units.map((unit) => (
+            <MenuItem key={unit.value} value={unit.value}>
+              {unit.label}
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+    </Box>
+
+    <Alert
+      severity="success"
+      sx={{
+        mt: 2,
+        backgroundColor: 'rgba(46,125,50,0.1)',
+        color: '#1b5e20'
+      }}
+    >
+      This product will be added to your current listing with Total Stock = 0 and Returned Items = 0.
+      You can then adjust the Total Stock in the listing table.
+    </Alert>
+  </DialogContent>
+  <DialogActions>
+    <Button onClick={() => setNewProductDialog(false)}>Cancel</Button>
+    <Button
+      variant="contained"
+      onClick={handleAddNewProduct}
+      disabled={!newProductData.productType || !newProductData.productCategory}
+    >
+      Add Product to Listing
+    </Button>
+  </DialogActions>
+</Dialog>
+
+
+          </div>
+        </Box>
+      </Box>
     </LocalizationProvider>
   );
 };
