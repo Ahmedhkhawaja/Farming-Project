@@ -4,9 +4,10 @@ const Product = require("../models/Product");
 const ProductType = require("../models/ProductType");
 const ProductCategory = require("../models/ProductCategory");
 const ProductSubCategory = require("../models/ProductSubCategory");
-const Stock = require("../models/Stock"); // New Stock model
+const Stock = require("../models/Stock");
 const auth = require("../middleware/auth");
 const requireManager = require("../middleware/requireManager");
+const allowStaffOrManager = require("../middleware/allowStaffOrManager"); // 👈 NEW
 
 // Debug middleware - logs all requests to product routes
 router.use((req, res, next) => {
@@ -17,6 +18,7 @@ router.use((req, res, next) => {
 // Require auth for all product routes
 router.use(auth);
 
+// ========== PRODUCT TYPE ENDPOINTS ==========
 // Get all product types
 router.get("/product-types", async (req, res) => {
   try {
@@ -30,6 +32,7 @@ router.get("/product-types", async (req, res) => {
   }
 });
 
+// ========== PRODUCT CATEGORY ENDPOINTS ==========
 // Get product categories by type
 router.get("/product-categories", async (req, res) => {
   try {
@@ -57,8 +60,8 @@ router.get("/product-categories", async (req, res) => {
   }
 });
 
-// Create new product category
-router.post("/product-categories", requireManager, async (req, res) => {
+// Create new product category - now accessible by staff and manager
+router.post("/product-categories", allowStaffOrManager, async (req, res) => {  // 👈 CHANGED
   try {
     const { productType, name } = req.body;
     console.log(`Creating new category: ${name} for type: ${productType}`);
@@ -94,6 +97,7 @@ router.post("/product-categories", requireManager, async (req, res) => {
   }
 });
 
+// ========== PRODUCT SUBCATEGORY ENDPOINTS ==========
 // Get product subcategories by category
 router.get("/product-subcategories", async (req, res) => {
   try {
@@ -121,8 +125,8 @@ router.get("/product-subcategories", async (req, res) => {
   }
 });
 
-// Create new product subcategory
-router.post("/product-subcategories", requireManager, async (req, res) => {
+// Create new product subcategory - now accessible by staff and manager
+router.post("/product-subcategories", allowStaffOrManager, async (req, res) => {  // 👈 CHANGED
   try {
     const { productCategory, name } = req.body;
     console.log(
@@ -160,6 +164,7 @@ router.post("/product-subcategories", requireManager, async (req, res) => {
   }
 });
 
+// ========== PRODUCT ENDPOINTS ==========
 // Get all products with populated data
 router.get("/products", async (req, res) => {
   try {
@@ -193,8 +198,8 @@ router.get("/products", async (req, res) => {
   }
 });
 
-// Create new product
-router.post("/products", requireManager, async (req, res) => {
+// Create new product - now accessible by staff and manager
+router.post("/products", allowStaffOrManager, async (req, res) => {  // 👈 CHANGED
   try {
     const { productType, productCategory, productSubCategory, unit } = req.body;
     console.log(`Creating new product: ${productCategory} (${productType})`);
@@ -271,8 +276,8 @@ router.post("/products", requireManager, async (req, res) => {
   }
 });
 
-// Update product
-router.put("/products/:id", requireManager, async (req, res) => {
+// Update product - now accessible by staff and manager
+router.put("/products/:id", allowStaffOrManager, async (req, res) => {  // 👈 CHANGED
   try {
     const { id } = req.params;
     const { productType, productCategory, productSubCategory, unit } = req.body;
@@ -337,8 +342,8 @@ router.put("/products/:id", requireManager, async (req, res) => {
   }
 });
 
-// Delete product
-router.delete("/products/:id", requireManager, async (req, res) => {
+// Delete product - now accessible by staff and manager
+router.delete("/products/:id", allowStaffOrManager, async (req, res) => {  // 👈 CHANGED
   try {
     const { id } = req.params;
     console.log(`Deleting product ${id}`);
@@ -356,17 +361,14 @@ router.delete("/products/:id", requireManager, async (req, res) => {
   }
 });
 
-// Add this route to your existing products.js file
-// Save bulk stock (for both day start and day end)
-// Add this route to your existing products.js file
-
-// Save bulk stock (for both day start and day end)
-router.post("/stocks/bulk", async (req, res) => {
+// ========== STOCK ENDPOINTS (MANAGER ONLY) ==========
+// Save bulk stock - manager only
+router.post("/stocks/bulk", requireManager, async (req, res) => {  // 👈 KEPT AS IS
   try {
     const stockData = req.body;
     console.log(`Saving ${stockData.length} stock items`);
 
-    // Validate required fields - FIXED to match what you're sending
+    // Validate required fields
     for (const item of stockData) {
       if (
         !item.date ||
@@ -382,24 +384,15 @@ router.post("/stocks/bulk", async (req, res) => {
         });
       }
 
-      // Ensure productSubCategory exists (can be empty string)
       if (item.productSubCategory === undefined) {
         item.productSubCategory = "";
       }
     }
 
-    // First, delete existing stock entries for the same date and location
     if (stockData.length > 0) {
       const firstItem = stockData[0];
       const date = new Date(firstItem.date);
 
-      // Format date for query
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-      const day = String(date.getDate()).padStart(2, "0");
-      const dateString = `${year}-${month}-${day}`;
-
-      // Create start and end of day for query
       const startOfDay = new Date(date);
       startOfDay.setHours(0, 0, 0, 0);
 
@@ -411,11 +404,10 @@ router.post("/stocks/bulk", async (req, res) => {
         location: firstItem.location,
       });
       console.log(
-        `Cleared existing stock for ${dateString} at ${firstItem.location}`,
+        `Cleared existing stock for ${date} at ${firstItem.location}`,
       );
     }
 
-    // Save new stock entries
     const savedStocks = await Stock.insertMany(stockData);
 
     console.log(`Successfully saved ${savedStocks.length} stock items`);
@@ -430,46 +422,6 @@ router.post("/stocks/bulk", async (req, res) => {
   }
 });
 
-// Add these routes to your products.js file if not already present
-
-// Get all product types (for dropdown)
-router.get("/products/types", async (req, res) => {
-  try {
-    const productTypes = await ProductType.find().sort("name");
-    res.json(productTypes);
-  } catch (err) {
-    console.error("Error fetching product types:", err);
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// Get product categories by type (for dropdown)
-router.get("/products/categories", async (req, res) => {
-  try {
-    const { type } = req.query;
-    if (!type) {
-      return res.status(400).json({ message: "Product type is required" });
-    }
-
-    const productType = await ProductType.findOne({ name: type });
-    if (!productType) {
-      return res.status(404).json({ message: "Product type not found" });
-    }
-
-    const categories = await ProductCategory.find({
-      productType: productType._id,
-    }).sort("name");
-
-    res.json(categories);
-  } catch (err) {
-    console.error("Error fetching product categories:", err);
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// Test endpoint
-router.get("/products-test", (req, res) => {
-  res.json({ message: "Products routes are working!" });
-});
+// Additional stock endpoints (if any) should also use requireManager
 
 module.exports = router;

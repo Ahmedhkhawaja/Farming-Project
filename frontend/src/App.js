@@ -19,6 +19,8 @@ import AddStocks from "./components/AddStocks/AddStocks";
 import EditStock from "./components/EditStock/EditStock"; // ADD THIS IMPORT
 import ReturnStock from "./components/ReturnStock/ReturnStock";
 import ProductManagement from "./components/ProductManagement/ProductManagement";
+import StaffOrManagerRoute from "./components/Layout/StaffOrManagerRoute";
+import StockViewRoute from "./components/Layout/StockViewRoute";
 
 import "./App.css";
 
@@ -51,12 +53,13 @@ function App() {
                   </PrivateRoute>
                 }
               />
+
               <Route
                 path="/products"
                 element={
-                  <ManagerRoute>
+                  <StaffOrManagerRoute>
                     <ProductManagement />
-                  </ManagerRoute>
+                  </StaffOrManagerRoute>
                 }
               />
               <Route
@@ -70,35 +73,35 @@ function App() {
               <Route
                 path="/stocks"
                 element={
-                  <PrivateRoute>
+                 <StockViewRoute>
                     <Stocks />
-                  </PrivateRoute>
+                  </StockViewRoute>
                 }
               />
               <Route
                 path="/add-stocks"
                 element={
-                  <PrivateRoute>
-                    <AddStocks />
-                  </PrivateRoute>
+                  <StockViewRoute>
+                   <AddStocks />
+                  </StockViewRoute>
                 }
               />
               {/* ADD EDIT STOCK ROUTE */}
               <Route
                 path="/edit-stocks/:id"
                 element={
-                  <PrivateRoute>
+                    <ManagerRoute>
                     <EditStock />
-                  </PrivateRoute>
+                  </ManagerRoute>
                 }
               />
               {/* ADD RETURN STOCK ROUTE */}
               <Route
                 path="/return-stock"
                 element={
-                  <PrivateRoute>
+                 <ManagerRoute>
                     <ReturnStock />
-                  </PrivateRoute>
+                  </ManagerRoute>
                 }
               />
               <Route path="/" element={<Navigate to="/dashboard" />} />

@@ -1,5 +1,6 @@
 // AddStock.jsx - Updated with UI changes fixed
 import React, { useState, useEffect } from 'react';
+
 import {
   TextField,
   Button,
@@ -44,6 +45,7 @@ import AcUnitIcon from '@mui/icons-material/AcUnit';
 import ThunderstormIcon from '@mui/icons-material/Thunderstorm';
 import api from '../../services/api';
 import '../AddStock.css';
+import { useAuth } from '../../context/AuthContext';
 
 // Helper: Celsius to Fahrenheit
 const celsiusToFahrenheit = (c) => Math.round((c * 9/5) + 32);
@@ -56,6 +58,9 @@ const getUnitLabel = (unit) => {
 };
 
 const AddStock = () => {
+  const { user } = useAuth();
+  const isManager = user?.role === 'manager';
+
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [marketLocation, setMarketLocation] = useState('Union Square (Monday) Manhattan');
   const [stockItems, setStockItems] = useState([]);
@@ -756,6 +761,8 @@ const AddStock = () => {
             </Typography>
 
             <Box sx={{ mb: 2 }}>
+              
+               {isManager && (
               <Button
                 variant="outlined"
                 startIcon={<AddCircleIcon />}
@@ -763,6 +770,7 @@ const AddStock = () => {
               >
                 Add Missing Product To Listing
               </Button>
+               )}
             </Box>
 
             <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
@@ -1003,6 +1011,7 @@ const AddStock = () => {
                                       type="number"
                                       value={item.totalStock}
                                       onChange={(e) => handleQuantityChange(originalIndex, 'totalStock', e.target.value)}
+                                      disabled={!isManager}  // 👈 disable if not manager
                                       onFocus={(e) => e.target.select()}
                                       InputProps={{
                                         inputProps: { min: 0, step: 0.5 }
@@ -1017,6 +1026,7 @@ const AddStock = () => {
                                       type="number"
                                       value={item.returnQty}
                                       onChange={(e) => handleQuantityChange(originalIndex, 'returnQty', e.target.value)}
+                                      disabled={!isManager}
                                       onFocus={(e) => e.target.select()}
                                       InputProps={{
                                         inputProps: { min: 0, step: 0.5, max: item.totalStock }
@@ -1026,6 +1036,7 @@ const AddStock = () => {
                                   </TableCell>
                                   <TableCell>
                                     <div className="action-buttons">
+                                      {isManager && (
                                       <IconButton
                                         size="small"
                                         onClick={() => handleDeleteItem(originalIndex)}
@@ -1034,6 +1045,7 @@ const AddStock = () => {
                                       >
                                         <DeleteIcon fontSize="small" />
                                       </IconButton>
+                                       )}
                                     </div>
                                   </TableCell>
                                 </TableRow>
@@ -1094,7 +1106,8 @@ const AddStock = () => {
                           }}
                           startIcon={loading ? <CircularProgress size={20} /> : <SaveIcon />}
                           onClick={handleSave}
-                          disabled={loading}
+                         // disabled={loading}
+                         disabled={loading || !isManager}  // 👈 disable if not manager
                           size="large"
                         >
                           Save/Update

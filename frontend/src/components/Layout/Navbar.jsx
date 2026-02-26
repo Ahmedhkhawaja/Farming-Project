@@ -42,15 +42,15 @@ const Navbar = () => {
               Dashboard
             </Button>
 
-            {user.role === "manager" && (
-              <Button 
-                sx={{ color: '#fff', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }} 
-                component={Link} 
-                to="/products"
-              >
-                Products
-              </Button>
-            )}
+            {(user.role === "manager" || user.role === "staff") && (
+    <Button 
+      sx={{ color: '#fff', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }} 
+      component={Link} 
+      to="/products"
+    >
+      Products
+    </Button>
+  )}
 
             <Button 
               sx={{ color: '#fff', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }} 
